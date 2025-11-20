@@ -1,0 +1,12 @@
+formatter: "markdown"
+
+output:
+  file: "README.md"
+  mode: "inject"
+
+sort:
+  enabled: false
+
+sections:
+  hide:
+    - providers
