@@ -1,1 +1,4 @@
-components/module/linkfiles/.tflint.hcl
+plugin "terraform" {
+  enabled = true
+  preset  = "recommended"
+}

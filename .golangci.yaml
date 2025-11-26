@@ -1,1 +1,5 @@
-components/module/linkfiles/.golangci.yaml
+version: "2"
+run:
+  # Timeout for analysis, e.g. 30s, 5m.
+  timeout: 5m
+  allow-parallel-runners: true
