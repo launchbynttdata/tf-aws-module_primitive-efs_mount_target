@@ -2,7 +2,6 @@ package testimpl
 
 import (
 	"context"
-	"regexp"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -15,52 +14,29 @@ import (
 )
 
 func TestComposableComplete(t *testing.T, ctx testTypes.TestContext) {
-	// Get AWS STS client to verify account info
-	stsClient := GetAWSSTSClient(t)
+	       // Get outputs from Terraform
+	       mountTargetIDs := terraform.OutputMap(t, ctx.TerratestTerraformOptions(), "aws_efs_mount_target_id")
+	       mountTargetDNSNames := terraform.OutputMap(t, ctx.TerratestTerraformOptions(), "aws_efs_mount_target_dns_name")
+	       mountTargetNetworkInterfaceIDs := terraform.OutputMap(t, ctx.TerratestTerraformOptions(), "aws_efs_mount_target_network_interface_id")
 
-	// Get the actual caller identity from AWS
-	callerIdentity, err := stsClient.GetCallerIdentity(context.TODO(), &sts.GetCallerIdentityInput{})
-	require.NoError(t, err, "Failed to get caller identity from AWS")
+	       t.Run("TestMountTargetIDs", func(t *testing.T) {
+		       for subnet, id := range mountTargetIDs {
+			       assert.NotEmpty(t, id, "Mount target ID for subnet %s should not be empty", subnet)
+		       }
+	       })
 
-	// Get outputs from Terraform
-	accountId := terraform.Output(t, ctx.TerratestTerraformOptions(), "account_id")
-	arn := terraform.Output(t, ctx.TerratestTerraformOptions(), "arn")
-	helloMessage := terraform.Output(t, ctx.TerratestTerraformOptions(), "hello_message")
+	       t.Run("TestMountTargetDNSNames", func(t *testing.T) {
+		       for subnet, dns := range mountTargetDNSNames {
+			       assert.NotEmpty(t, dns, "Mount target DNS name for subnet %s should not be empty", subnet)
+			       assert.Contains(t, dns, ".efs.", "DNS name for subnet %s should contain '.efs.'", subnet)
+		       }
+	       })
 
-	t.Run("TestAccountIdMatches", func(t *testing.T) {
-		testAccountIdMatches(t, callerIdentity, accountId)
-	})
-
-	t.Run("TestArnMatches", func(t *testing.T) {
-		testArnMatches(t, callerIdentity, arn)
-	})
-
-	t.Run("TestHelloMessage", func(t *testing.T) {
-		testHelloMessage(t, helloMessage)
-	})
-}
-
-func testAccountIdMatches(t *testing.T, callerIdentity *sts.GetCallerIdentityOutput, accountId string) {
-	assert.Equal(t, *callerIdentity.Account, accountId, "Account ID from Terraform should match AWS caller identity")
-	assert.NotEmpty(t, accountId, "Account ID should not be empty")
-
-	// Verify it's a valid 12-digit account ID
-	matched, _ := regexp.MatchString(`^\d{12}$`, accountId)
-	assert.True(t, matched, "Account ID should be a 12-digit number")
-}
-
-func testArnMatches(t *testing.T, callerIdentity *sts.GetCallerIdentityOutput, arn string) {
-	assert.Equal(t, *callerIdentity.Arn, arn, "ARN from Terraform should match AWS caller identity")
-	assert.NotEmpty(t, arn, "ARN should not be empty")
-
-	// Verify it's a valid ARN format
-	matched, _ := regexp.MatchString(`^arn:aws:`, arn)
-	assert.True(t, matched, "ARN should start with 'arn:aws:'")
-}
-
-func testHelloMessage(t *testing.T, helloMessage string) {
-	assert.NotEmpty(t, helloMessage, "Hello message should not be empty")
-	assert.Contains(t, helloMessage, "Hello", "Message should contain 'Hello'")
+	       t.Run("TestMountTargetNetworkInterfaceIDs", func(t *testing.T) {
+		       for subnet, ni := range mountTargetNetworkInterfaceIDs {
+			       assert.NotEmpty(t, ni, "Network interface ID for subnet %s should not be empty", subnet)
+		       }
+	       })
 }
 
 func GetAWSSTSClient(t *testing.T) *sts.Client {

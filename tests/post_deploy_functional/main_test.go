@@ -27,11 +27,11 @@ const (
 
 func TestModule(t *testing.T) {
 
-	ctx := types.CreateTestContextBuilder().
-		SetTestConfig(&testimpl.ThisTFModuleConfig{}).
-		SetTestConfigFolderName(testConfigsExamplesFolderDefault).
-		SetTestConfigFileName(infraTFVarFileNameDefault).
-		Build()
+	       ctx := types.CreateTestContextBuilder().
+		       SetTestConfig(&testimpl.ThisTFModuleConfig{}).
+		       SetTestConfigFolderName(testConfigsExamplesFolderDefault).
+		       SetTestConfigFileName(infraTFVarFileNameDefault).
+		       Build()
 
-	lib.RunSetupTestTeardown(t, *ctx, testimpl.TestComposableComplete)
+	       lib.RunSetupTestTeardown(t, *ctx, testimpl.TestComposableComplete)
 }

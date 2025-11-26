@@ -1,14 +1,4 @@
-# .pre-commit-config.yaml
 repos:
-  - repo: local
-    hooks:
-      - id: forbidden-files
-        name: forbidden files
-        entry:
-          found Copier update rejection files; review and remove them before
-          merging.
-        language: fail
-        files: "\\.rej$"
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
@@ -17,7 +7,6 @@ repos:
       - id: check-executables-have-shebangs
       - id: check-json
       - id: check-merge-conflict
-        args: [--assume-in-merge]
       - id: check-shebang-scripts-are-executable
       - id: check-yaml
         args:

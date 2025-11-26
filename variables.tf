@@ -1,16 +1,64 @@
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+variable "create_timeout" {
+  description = "(Optional) Timeout for creating the EFS mount target (e.g., '30m')."
+  type        = string
+  default     = "30m"
+}
+
+variable "delete_timeout" {
+  description = "(Optional) Timeout for deleting the EFS mount target (e.g., '10m')."
+  type        = string
+  default     = "10m"
+}
+variable "ip_address" {
+  description = "(Optional) A specific IP address within the subnet to be used for the EFS mount target. Defaults to AWS-assigned."
+  type        = string
+  default     = null
+}
+
 variable "subnet_ids" {
-  description = "List of subnet IDs where EFS mount targets should be created"
+  description = "List of subnet IDs where EFS mount targets should be created. Must be non-empty."
   type        = list(string)
-  default     = []
+
+  validation {
+    condition     = length(var.subnet_ids) > 0
+    error_message = "You must provide at least one subnet ID."
+  }
 }
 
 variable "security_group_ids" {
-  description = "List of security group IDs for the EFS mount targets"
+  description = "List of security group IDs for the EFS mount targets. Must be non-empty."
   type        = list(string)
-  default     = []
+
+  validation {
+    condition     = length(var.security_group_ids) > 0
+    error_message = "You must provide at least one security group ID."
+  }
 }
 
 variable "efs_filesystem_id" {
-  description = "The ID of the EFS file system"
+  description = "The ID of the EFS file system."
   type        = string
+
+  validation {
+    condition     = length(var.efs_filesystem_id) > 0
+    error_message = "You must provide a valid EFS file system ID."
+  }
 }
+
+# Not used for aws_efs_mount_target.
+# variable "tags" {
+#   description = "A map of tags to assign to resources that support tagging."
+#   type        = map(string)
+#   default     = {}
+# }

@@ -10,17 +10,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-output "account_id" {
-  description = "AWS Account ID"
-  value       = module.hello.account_id
+output "aws_efs_mount_target_id" {
+  description = "The ID of the EFS mount target created."
+  value       = module.efs_mount_target.mount_target_ids
 }
 
-output "arn" {
-  description = "AWS Caller Identity ARN"
-  value       = module.hello.arn
+output "aws_efs_mount_target_dns_name" {
+  description = "The DNS name for the EFS file system."
+  value       = module.efs_mount_target.mount_target_dns_names
 }
 
-output "hello_message" {
-  description = "Hello message"
-  value       = module.hello.hello_message
+output "aws_efs_mount_target_network_interface_id" {
+  description = "The network interface ID for the EFS mount target."
+  value       = module.efs_mount_target.mount_target_network_interface_ids
 }

@@ -166,108 +166,64 @@ locals {
     provisioner = "Terraform"
   }
 }
-```
 
-#### `versions.tf`
+# tf-aws-module_primitive-efs_mount_target
 
-- Specify required Terraform and provider versions
-- Example:
+## Overview
+
+This module creates AWS EFS mount targets in one or more subnets for a given EFS file system. It is a primitive module, focused on wrapping the [`aws_efs_mount_target`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_mount_target) resource, and is designed for use as a building block in larger infrastructure compositions.
+
+## Features
+
+- Creates one EFS mount target per subnet
+- Supports multiple security groups
+- Validates required inputs
+- Exposes mount target IDs, DNS names, and network interface IDs
+- Follows Launch by NTT DATA module standards
+
+## Usage
 
 ```hcl
-terraform {
-  required_version = "~> 1.5"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.100"
-    }
-  }
+module "efs_mount_target" {
+  source             = "launchbynttdata/efs_mount_target/aws"
+  efs_filesystem_id  = "fs-12345678"
+  subnet_ids         = ["subnet-abc123", "subnet-def456"]
+  security_group_ids = ["sg-12345678"]
 }
 ```
 
-### Step 3: Create Examples
+## Inputs
 
-Create example configurations in the `examples/` directory:
+| Name                | Description                                                        | Type         | Default | Required |
+|---------------------|--------------------------------------------------------------------|--------------|---------|:--------:|
+| subnet_ids          | List of subnet IDs where EFS mount targets should be created        | list(string) | n/a     | yes      |
+| security_group_ids  | List of security group IDs for the EFS mount targets               | list(string) | n/a     | yes      |
+| efs_filesystem_id   | The ID of the EFS file system                                      | string       | n/a     | yes      |
+| tags                | Map of tags to assign to resources that support tagging (unused)   | map(string)  | `{}`    | no       |
 
-#### `examples/simple/`
+## Outputs
 
-- Minimal, working configuration
-- Uses only required variables
-- Good for quick starts and basic testing
+| Name                           | Description                                              |
+|--------------------------------|----------------------------------------------------------|
+| mount_target_ids               | Map of subnet ID to EFS mount target ID                  |
+| mount_target_dns_names         | Map of subnet ID to EFS mount target DNS name            |
+| mount_target_network_interface_ids | Map of subnet ID to network interface ID created for the EFS mount target |
 
-#### `examples/complete/`
+## Validation Rules
 
-- Comprehensive configuration showing all features
-- Demonstrates advanced options
-- Includes comments explaining choices
+- `subnet_ids` must be a non-empty list
+- `security_group_ids` must be a non-empty list
+- `efs_filesystem_id` must be a non-empty string
 
-Each example should include:
+## Testing
 
-- `main.tf` - The module invocation
-- `variables.tf` - Example variables
-- `outputs.tf` - Pass-through outputs
-- `test.tfvars` - Test values for automated testing
-- `README.md` - Documentation for the example
-
-### Step 4: Write Tests
-
-Update the test files in `tests/`:
-
-#### `tests/testimpl/test_impl.go`
-
-Write functional tests that verify:
-
-- The resource is created successfully
-- Resource properties match expectations
-- Outputs are correct
-- Integration with AWS SDK to verify actual state
-
-#### `tests/testimpl/types.go`
-
-Define the configuration structure for your tests:
-
-```go
-type ThisTFModuleConfig struct {
-    Name              string `json:"name"`
-    KubernetesVersion string `json:"kubernetes_version"`
-    // ... other fields
-}
-```
-
-#### `tests/post_deploy_functional/main_test.go`
-
-- Update test names to match your module
-- Configure test flags (e.g., idempotency settings)
-- Adjust test context as needed
-
-### Step 5: Update Documentation
-
-1. **Update README.md** with:
-   - Overview of the module
-   - Feature list
-   - Usage examples
-   - Input/output documentation
-   - Validation rules
-
-2. **Document validation rules** clearly so users understand constraints.
-
-### Step 6: Test Your Module
-
-1. **Run local validation**:
+Run all validation and tests:
 
 ```bash
 make check
 ```
 
-This runs:
-
-- Terraform fmt, validate, and plan
-- Go tests with Terratest
-- Pre-commit hooks
-- Security scans
-
-1. **Test with real infrastructure**:
+To deploy an example:
 
 ```bash
 cd examples/simple
@@ -276,158 +232,14 @@ terraform plan -var-file=test.tfvars -out=the.tfplan
 terraform apply the.tfplan
 ```
 
-1. **Verify outputs**:
+## AWS Documentation
 
-```bash
-terraform output
-```
+- [aws_efs_mount_target](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_mount_target)
 
-1. **Clean up**:
+## License
 
-```bash
-terraform destroy -var-file=test.tfvars
-```
-
-### Step 7: Document and Release
-
-1. **Write a comprehensive README** following the pattern in the example modules
-1. **Add files to commit** `git add .`
-1. **Run pre-commit hooks manually** `pre-commit run`
-1. **Resolve any pre-commit issues**
-1. **Push branch to github**
-
----
-
-## Module Best Practices
-
-### Naming Conventions
-
-- Repository: `tf-aws-module_primitive-<resource_name>`
-- Resource identifier: Use `this` for the primary resource.
-- Variables: Use snake_case.
-- Match AWS resource parameter names where possible.
-
-### Input Variables
-
-- Provide sensible defaults when safe to do so.
-- Use `null` as default for optional complex objects.
-- Include validation rules with clear error messages.
-- Group related parameters using object types.
-- Document expected formats and constraints.
-
-### Outputs
-
-- Export all significant resource attributes.
-- Use clear, descriptive output names.
-- Include descriptions for all outputs.
-- Consider downstream module needs.
-
-### Tags
-
-- Always include a `tags` variable, unless the resource does not support tags.
-- Merge with `local.default_tags` including `provisioner = "Terraform"`.
-- Use provider default tags when appropriate.
-
-### Validation
-
-- Validate input constraints at the variable level.
-- Provide helpful error messages.
-- Check for common misconfigurations.
-- Validate relationships between variables.
-
-### Testing
-
-- Test the minimal example (required parameters only).
-- Test the complete example (all features).
-- Verify resource creation and properties.
-- Test idempotency where applicable.
-- Test validation rules by expecting failures.
-
-### Documentation
-
-- Clear overview of the module's purpose.
-- Feature list highlighting key capabilities.
-- Multiple usage examples (minimal and complete).
-- Comprehensive input/output tables.
-- Document validation rules and constraints.
-- Include links to relevant AWS documentation.
-
----
-
-## File Structure
-
-After initialization, your module should have this structure:
-
-```
-tf-aws-module_primitive-<resource_name>/
-├── .github/
-│   └── workflows/          # CI/CD workflows
-├── examples/
-│   ├── simple/            # Minimal example
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   ├── outputs.tf
-│   │   ├── test.tfvars
-│   │   └── README.md
-│   └── complete/          # Comprehensive example
-│       ├── main.tf
-│       ├── variables.tf
-│       ├── outputs.tf
-│       ├── test.tfvars
-│       └── README.md
-├── tests/
-│   ├── post_deploy_functional/
-│   │   └── main_test.go
-│   ├── testimpl/
-│   │   ├── test_impl.go
-│   │   └── types.go
-├── .gitignore
-├── .pre-commit-config.yaml
-├── .tool-versions
-├── go.mod
-├── go.sum
-├── LICENSE
-├── locals.tf
-├── main.tf
-├── Makefile
-├── outputs.tf
-├── README.md
-├── variables.tf
-└── versions.tf
-```
-
----
-
-## Common Makefile Targets
-
-| Target | Description |
-|--------|-------------|
-| `make init-module` | Initialize new module from template (run once after creating from template) |
-| `make configure-dependencies` | Install required development tools |
-| `make configure-git-hooks` | Set up pre-commit hooks |
-| `make check` | Run all validation and tests |
-| `make configure` | Full setup (dependencies + hooks + repo sync) |
-| `make clean` | Remove downloaded components |
-
----
-
-## Getting Help
-
-- Review example modules: [EKS Cluster](https://github.com/launchbynttdata/tf-aws-module_primitive-eks_cluster), [KMS Key](https://github.com/launchbynttdata/tf-aws-module_primitive-kms_key)
-- Check the Launch Common Automation Framework documentation.
-- Reach out to the platform team for guidance.
-
----
-
-## Contributing
-
-Follow the established patterns in existing primitive modules. All modules should:
-
-- Pass `make check` validation.
-- Include comprehensive tests.
-- Follow naming conventions.
-- Include clear documentation.
-- Use semantic versioning.
+Apache 2.0. See LICENSE and NOTICE files for details.
+- Adjust test context as needed
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
@@ -437,12 +249,6 @@ Follow the established patterns in existing primitive modules. All modules shoul
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.5 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 5.100 |
 
-## Providers
-
-| Name | Version |
-|------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | 5.100.0 |
-
 ## Modules
 
 No modules.
@@ -451,19 +257,29 @@ No modules.
 
 | Name | Type |
 |------|------|
-| [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
+| [aws_efs_mount_target.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_mount_target) | resource |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_hello_message"></a> [hello\_message](#input\_hello\_message) | A friendly hello message. | `string` | `"Hello, Terraform!"` | no |
+| <a name="input_create_timeout"></a> [create\_timeout](#input\_create\_timeout) | (Optional) Timeout for creating the EFS mount target (e.g., '30m'). | `string` | `"30m"` | no |
+| <a name="input_delete_timeout"></a> [delete\_timeout](#input\_delete\_timeout) | (Optional) Timeout for deleting the EFS mount target (e.g., '10m'). | `string` | `"10m"` | no |
+| <a name="input_ip_address"></a> [ip\_address](#input\_ip\_address) | (Optional) A specific IP address within the subnet to be used for the EFS mount target. Defaults to AWS-assigned. | `string` | `null` | no |
+| <a name="input_subnet_ids"></a> [subnet\_ids](#input\_subnet\_ids) | List of subnet IDs where EFS mount targets should be created. Must be non-empty. | `list(string)` | n/a | yes |
+| <a name="input_security_group_ids"></a> [security\_group\_ids](#input\_security\_group\_ids) | List of security group IDs for the EFS mount targets. Must be non-empty. | `list(string)` | n/a | yes |
+| <a name="input_efs_filesystem_id"></a> [efs\_filesystem\_id](#input\_efs\_filesystem\_id) | The ID of the EFS file system. | `string` | n/a | yes |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
-| <a name="output_account_id"></a> [account\_id](#output\_account\_id) | n/a |
-| <a name="output_arn"></a> [arn](#output\_arn) | n/a |
-| <a name="output_hello_message"></a> [hello\_message](#output\_hello\_message) | n/a |
+| <a name="output_mount_target_ids"></a> [mount\_target\_ids](#output\_mount\_target\_ids) | Map of subnet ID to EFS mount target ID. |
+| <a name="output_mount_target_dns_names"></a> [mount\_target\_dns\_names](#output\_mount\_target\_dns\_names) | Map of subnet ID to EFS file system DNS name (file-system-id.efs.aws-region.amazonaws.com). |
+| <a name="output_mount_target_az_dns_names"></a> [mount\_target\_az\_dns\_names](#output\_mount\_target\_az\_dns\_names) | Map of subnet ID to mount target AZ-specific DNS name (availability-zone.file-system-id.efs.aws-region.amazonaws.com). |
+| <a name="output_mount_target_file_system_arns"></a> [mount\_target\_file\_system\_arns](#output\_mount\_target\_file\_system\_arns) | Map of subnet ID to EFS file system ARN. |
+| <a name="output_mount_target_network_interface_ids"></a> [mount\_target\_network\_interface\_ids](#output\_mount\_target\_network\_interface\_ids) | Map of subnet ID to network interface ID created for the EFS mount target. |
+| <a name="output_mount_target_availability_zone_names"></a> [mount\_target\_availability\_zone\_names](#output\_mount\_target\_availability\_zone\_names) | Map of subnet ID to the name of the Availability Zone (AZ) that the mount target resides in. |
+| <a name="output_mount_target_availability_zone_ids"></a> [mount\_target\_availability\_zone\_ids](#output\_mount\_target\_availability\_zone\_ids) | Map of subnet ID to the unique identifier of the Availability Zone (AZ) that the mount target resides in. |
+| <a name="output_mount_target_owner_ids"></a> [mount\_target\_owner\_ids](#output\_mount\_target\_owner\_ids) | Map of subnet ID to AWS account ID that owns the mount target resource. |
 <!-- END_TF_DOCS -->
