@@ -11,7 +11,7 @@
 
 resource "aws_efs_mount_target" "this" {
   # Create a mount target for each provided subnet
-  for_each = { for idx, subnet_id in var.subnet_ids : tostring(idx) => subnet_id }
+  for_each = { for idx, subnet_id in var.subnet_ids : idx => subnet_id }
 
   # Required: EFS file system ID and subnet ID
   file_system_id = var.efs_filesystem_id

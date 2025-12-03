@@ -5,6 +5,8 @@ go 1.25
 require (
 	github.com/aws/aws-sdk-go-v2 v1.40.1
 	github.com/aws/aws-sdk-go-v2/config v1.32.3
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.193.0
+	github.com/aws/aws-sdk-go-v2/service/efs v1.41.7
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.3
 	github.com/gruntwork-io/terratest v0.54.0
 	github.com/launchbynttdata/lcaf-component-terratest v1.0.4
@@ -27,7 +29,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.51.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.44.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.37.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.193.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.36.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ecs v1.52.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/iam v1.38.1 // indirect
