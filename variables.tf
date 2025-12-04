@@ -20,29 +20,43 @@ variable "delete_timeout" {
   type        = string
   default     = "10m"
 }
-variable "ip_address" {
-  description = "(Optional) A specific IP address within the subnet to be used for the EFS mount target. Defaults to AWS-assigned."
-  type        = string
-  default     = null
-}
+variable "mount_targets" {
+  description = <<-EOT
+    Map of mount target configurations. Each key identifies a mount target (e.g., 'az-a', 'subnet-1').
+    This key-based approach ensures mount targets are not rebuilt when configurations change.
 
-variable "subnet_ids" {
-  description = "List of subnet IDs where EFS mount targets should be created. Must be non-empty."
-  type        = list(string)
+    Each mount target supports:
+    - subnet_id: (Required) The subnet ID where the mount target will be created
+    - ip_address: (Optional) Static IP address for the mount target
+    - security_group_ids: (Optional) Security group IDs for this specific mount target
+  EOT
+  type = map(object({
+    subnet_id          = string
+    ip_address         = optional(string, null)
+    security_group_ids = optional(list(string), null)
+  }))
 
   validation {
-    condition     = length(var.subnet_ids) > 0
-    error_message = "You must provide at least one subnet ID."
+    condition     = length(var.mount_targets) > 0
+    error_message = "You must provide at least one mount target configuration."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.mount_targets : v.subnet_id != null && v.subnet_id != ""
+    ])
+    error_message = "Each mount target must have a valid subnet_id."
   }
 }
 
 variable "security_group_ids" {
-  description = "List of security group IDs for the EFS mount targets. Must be non-empty."
+  description = "(Optional) Default list of security group IDs for mount targets. Can be overridden per mount target. If not provided here or per mount target, AWS will use the VPC's default security group."
   type        = list(string)
+  default     = null
 
   validation {
-    condition     = length(var.security_group_ids) > 0
-    error_message = "You must provide at least one security group ID."
+    condition     = var.security_group_ids == null || length(var.security_group_ids) > 0
+    error_message = "If security_group_ids is provided, it must contain at least one security group ID."
   }
 }
 

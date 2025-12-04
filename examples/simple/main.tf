@@ -75,8 +75,16 @@ module "aws_efs_file_system" {
 
 # EFS mount target module usage
 module "efs_mount_target" {
-  source             = "../../"
-  efs_filesystem_id  = module.aws_efs_file_system.file_system_id
-  subnet_ids         = [aws_subnet.this.id]
+  source            = "../../"
+  efs_filesystem_id = module.aws_efs_file_system.file_system_id
+
+  # Map-based configuration with static keys known at plan time
+  mount_targets = {
+    "primary" = {
+      subnet_id = aws_subnet.this.id
+    }
+  }
+
+  # Default security groups for all mount targets
   security_group_ids = [aws_security_group.this.id]
 }

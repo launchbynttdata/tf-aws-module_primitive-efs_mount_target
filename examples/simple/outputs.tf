@@ -10,17 +10,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-output "aws_efs_mount_target_id" {
-  description = "The ID of the EFS mount target created."
+output "mount_target_ids" {
+  description = "Map of mount target key to EFS mount target ID."
   value       = module.efs_mount_target.mount_target_ids
 }
 
-output "aws_efs_mount_target_dns_name" {
-  description = "The DNS name for the EFS file system."
+output "mount_target_subnet_ids" {
+  description = "Map of mount target key to subnet ID."
+  value       = module.efs_mount_target.mount_target_subnet_ids
+}
+
+output "mount_target_dns_names" {
+  description = "Map of mount target key to EFS file system DNS name."
   value       = module.efs_mount_target.mount_target_dns_names
 }
 
-output "aws_efs_mount_target_network_interface_id" {
-  description = "The network interface ID for the EFS mount target."
+output "mount_target_az_dns_names" {
+  description = "Map of mount target key to mount target AZ-specific DNS name."
+  value       = module.efs_mount_target.mount_target_az_dns_names
+}
+
+output "mount_target_network_interface_ids" {
+  description = "Map of mount target key to network interface ID."
   value       = module.efs_mount_target.mount_target_network_interface_ids
+}
+
+output "mount_target_availability_zone_names" {
+  description = "Map of mount target key to availability zone name."
+  value       = module.efs_mount_target.mount_target_availability_zone_names
+}
+
+output "mount_target_availability_zone_ids" {
+  description = "Map of mount target key to availability zone ID."
+  value       = module.efs_mount_target.mount_target_availability_zone_ids
+}
+
+output "efs_file_system_id" {
+  description = "The ID of the EFS file system."
+  value       = module.aws_efs_file_system.file_system_id
+}
+
+output "efs_file_system_arn" {
+  description = "The ARN of the EFS file system."
+  value       = module.aws_efs_file_system.file_system_arn
 }

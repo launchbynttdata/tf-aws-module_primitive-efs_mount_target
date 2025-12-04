@@ -11,41 +11,46 @@
 // limitations under the License.
 
 output "mount_target_ids" {
-  description = "Map of subnet ID to EFS mount target ID."
+  description = "Map of mount target key to EFS mount target ID."
   value       = { for k, v in aws_efs_mount_target.this : k => v.id }
 }
 
+output "mount_target_subnet_ids" {
+  description = "Map of mount target key to subnet ID."
+  value       = { for k, v in aws_efs_mount_target.this : k => v.subnet_id }
+}
+
 output "mount_target_dns_names" {
-  description = "Map of subnet ID to EFS file system DNS name (file-system-id.efs.aws-region.amazonaws.com)."
+  description = "Map of mount target key to EFS file system DNS name (file-system-id.efs.aws-region.amazonaws.com)."
   value       = { for k, v in aws_efs_mount_target.this : k => v.dns_name }
 }
 
 output "mount_target_az_dns_names" {
-  description = "Map of subnet ID to mount target AZ-specific DNS name (availability-zone.file-system-id.efs.aws-region.amazonaws.com)."
+  description = "Map of mount target key to mount target AZ-specific DNS name (availability-zone.file-system-id.efs.aws-region.amazonaws.com)."
   value       = { for k, v in aws_efs_mount_target.this : k => v.mount_target_dns_name }
 }
 
 output "mount_target_file_system_arns" {
-  description = "Map of subnet ID to EFS file system ARN."
+  description = "Map of mount target key to EFS file system ARN."
   value       = { for k, v in aws_efs_mount_target.this : k => v.file_system_arn }
 }
 
 output "mount_target_network_interface_ids" {
-  description = "Map of subnet ID to network interface ID created for the EFS mount target."
+  description = "Map of mount target key to network interface ID created for the EFS mount target."
   value       = { for k, v in aws_efs_mount_target.this : k => v.network_interface_id }
 }
 
 output "mount_target_availability_zone_names" {
-  description = "Map of subnet ID to the name of the Availability Zone (AZ) that the mount target resides in."
+  description = "Map of mount target key to the name of the Availability Zone (AZ) that the mount target resides in."
   value       = { for k, v in aws_efs_mount_target.this : k => v.availability_zone_name }
 }
 
 output "mount_target_availability_zone_ids" {
-  description = "Map of subnet ID to the unique identifier of the Availability Zone (AZ) that the mount target resides in."
+  description = "Map of mount target key to the unique identifier of the Availability Zone (AZ) that the mount target resides in."
   value       = { for k, v in aws_efs_mount_target.this : k => v.availability_zone_id }
 }
 
 output "mount_target_owner_ids" {
-  description = "Map of subnet ID to AWS account ID that owns the mount target resource."
+  description = "Map of mount target key to AWS account ID that owns the mount target resource."
   value       = { for k, v in aws_efs_mount_target.this : k => v.owner_id }
 }

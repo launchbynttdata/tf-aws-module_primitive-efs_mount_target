@@ -25,13 +25,24 @@ const (
 	infraTFVarFileNameDefault        = "test.tfvars"
 )
 
-func TestModule(t *testing.T) {
+func TestSimpleExample(t *testing.T) {
 
-	       ctx := types.CreateTestContextBuilder().
-		       SetTestConfig(&testimpl.ThisTFModuleConfig{}).
-		       SetTestConfigFolderName(testConfigsExamplesFolderDefault).
-		       SetTestConfigFileName(infraTFVarFileNameDefault).
-		       Build()
+	ctx := types.CreateTestContextBuilder().
+		SetTestConfig(&testimpl.ThisTFModuleConfig{}).
+		SetTestConfigFolderName("../../examples/simple").
+		SetTestConfigFileName(infraTFVarFileNameDefault).
+		Build()
 
-	       lib.RunSetupTestTeardown(t, *ctx, testimpl.TestComposableComplete)
+	lib.RunSetupTestTeardown(t, *ctx, testimpl.TestSimpleExample)
+}
+
+func TestMultiSubnetExample(t *testing.T) {
+
+	ctx := types.CreateTestContextBuilder().
+		SetTestConfig(&testimpl.ThisTFModuleConfig{}).
+		SetTestConfigFolderName("../../examples/multi_subnet").
+		SetTestConfigFileName(infraTFVarFileNameDefault).
+		Build()
+
+	lib.RunSetupTestTeardown(t, *ctx, testimpl.TestMultiSubnetWithChanges)
 }

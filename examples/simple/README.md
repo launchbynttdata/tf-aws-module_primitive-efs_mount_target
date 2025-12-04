@@ -120,7 +120,13 @@ terraform destroy -var-file=test.tfvars
 
 | Name | Description |
 |------|-------------|
-| <a name="output_aws_efs_mount_target_id"></a> [aws\_efs\_mount\_target\_id](#output\_aws\_efs\_mount\_target\_id) | The ID of the EFS mount target created. |
-| <a name="output_aws_efs_mount_target_dns_name"></a> [aws\_efs\_mount\_target\_dns\_name](#output\_aws\_efs\_mount\_target\_dns\_name) | The DNS name for the EFS file system. |
-| <a name="output_aws_efs_mount_target_network_interface_id"></a> [aws\_efs\_mount\_target\_network\_interface\_id](#output\_aws\_efs\_mount\_target\_network\_interface\_id) | The network interface ID for the EFS mount target. |
+| <a name="output_mount_target_ids"></a> [mount\_target\_ids](#output\_mount\_target\_ids) | Map of mount target key to EFS mount target ID. |
+| <a name="output_mount_target_subnet_ids"></a> [mount\_target\_subnet\_ids](#output\_mount\_target\_subnet\_ids) | Map of mount target key to subnet ID. |
+| <a name="output_mount_target_dns_names"></a> [mount\_target\_dns\_names](#output\_mount\_target\_dns\_names) | Map of mount target key to EFS file system DNS name. |
+| <a name="output_mount_target_az_dns_names"></a> [mount\_target\_az\_dns\_names](#output\_mount\_target\_az\_dns\_names) | Map of mount target key to mount target AZ-specific DNS name. |
+| <a name="output_mount_target_network_interface_ids"></a> [mount\_target\_network\_interface\_ids](#output\_mount\_target\_network\_interface\_ids) | Map of mount target key to network interface ID. |
+| <a name="output_mount_target_availability_zone_names"></a> [mount\_target\_availability\_zone\_names](#output\_mount\_target\_availability\_zone\_names) | Map of mount target key to availability zone name. |
+| <a name="output_mount_target_availability_zone_ids"></a> [mount\_target\_availability\_zone\_ids](#output\_mount\_target\_availability\_zone\_ids) | Map of mount target key to availability zone ID. |
+| <a name="output_efs_file_system_id"></a> [efs\_file\_system\_id](#output\_efs\_file\_system\_id) | The ID of the EFS file system. |
+| <a name="output_efs_file_system_arn"></a> [efs\_file\_system\_arn](#output\_efs\_file\_system\_arn) | The ARN of the EFS file system. |
 <!-- END_TF_DOCS -->
