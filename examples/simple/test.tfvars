@@ -3,7 +3,7 @@
 
 
 # Region and availability zone
-region                   = "us-west-2"
+region                   = "us-east-2"
 availability_zone_letter = "a"
 
 # VPC and subnet variables
