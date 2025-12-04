@@ -95,6 +95,9 @@ The test suite validates both Terraform outputs and actual AWS resource state:
    - Read EFS file systems
 
 3. **Example configuration**: Ensure `examples/simple/test.tfvars` contains valid values
+   - Set `region` to your target AWS region (e.g., `us-east-2`)
+   - Set `availability_zone_letter` to a valid AZ suffix (e.g., `a`, `b`, or `c`)
+   - The full AZ name will be automatically constructed as `{region}{availability_zone_letter}`
 
 ### Running Full Integration Tests
 
@@ -178,12 +181,26 @@ Control test behavior via environment variables:
 # Show Terraform debug logs
 export TF_LOG=DEBUG
 
-# Set AWS region
+# Set AWS region (examples will construct full AZ names)
 export AWS_REGION=us-east-2
 
 # Use specific AWS profile
 export AWS_PROFILE=my-profile
 ```
+
+### Testing Across Different Regions
+
+The examples support region-aware configuration. To test in different regions:
+
+```bash
+# Test in us-west-2
+terraform apply -var-file=test.tfvars -var='region=us-west-2'
+
+# Test in eu-west-1
+terraform apply -var-file=test.tfvars -var='region=eu-west-1'
+```
+
+The availability zone names are automatically constructed from the region and AZ letter suffix (e.g., `us-west-2` + `a` = `us-west-2a`)
 
 ## Debugging Tests
 

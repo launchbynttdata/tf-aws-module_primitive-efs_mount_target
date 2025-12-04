@@ -12,9 +12,10 @@
 
 # Minimal example for EFS mount target module
 
-# provider "aws" {
-#   region = var.region
-# }
+# Local to construct full AZ name from region and letter
+locals {
+  availability_zone = "${var.region}${var.availability_zone_letter}"
+}
 
 # VPC for EFS
 resource "aws_vpc" "this" {
@@ -25,7 +26,7 @@ resource "aws_vpc" "this" {
 resource "aws_subnet" "this" {
   vpc_id            = aws_vpc.this.id
   cidr_block        = var.subnet_cidr_block
-  availability_zone = var.availability_zone
+  availability_zone = local.availability_zone
 }
 
 # Security group for EFS

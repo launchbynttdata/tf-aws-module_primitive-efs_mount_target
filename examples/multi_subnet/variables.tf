@@ -10,6 +10,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+variable "region" {
+  description = "AWS region where resources will be created"
+  type        = string
+  default     = "us-east-2"
+
+  validation {
+    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]{1}$", var.region))
+    error_message = "Region must be a valid AWS region format (e.g., us-east-1, eu-west-2)."
+  }
+}
+
 variable "project_name" {
   description = "Project name used for resource naming and tagging"
   type        = string
@@ -34,10 +45,10 @@ variable "vpc_cidr_block" {
 }
 
 variable "subnet_configs" {
-  description = "List of subnet configurations with CIDR blocks and availability zones"
+  description = "List of subnet configurations with CIDR blocks and AZ letter suffixes (e.g., 'a', 'b', 'c')"
   type = list(object({
-    cidr_block        = string
-    availability_zone = string
+    cidr_block = string
+    az_letter  = string
   }))
 
   validation {
@@ -54,9 +65,9 @@ variable "subnet_configs" {
 
   validation {
     condition = alltrue([
-      for config in var.subnet_configs : length(config.availability_zone) > 0
+      for config in var.subnet_configs : can(regex("^[a-z]$", config.az_letter))
     ])
-    error_message = "All availability zones must be non-empty strings."
+    error_message = "All AZ letters must be single lowercase letters (a-z)."
   }
 }
 

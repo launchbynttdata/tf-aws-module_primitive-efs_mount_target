@@ -10,6 +10,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+# Region variable
+variable "region" {
+  description = "AWS region where resources will be created."
+  type        = string
+  default     = "us-east-2"
+
+  validation {
+    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]{1}$", var.region))
+    error_message = "Region must be a valid AWS region format (e.g., us-east-1, eu-west-2)."
+  }
+}
+
 # VPC and subnet variables
 variable "vpc_cidr_block" {
   description = "CIDR block for the VPC."
@@ -33,13 +45,14 @@ variable "subnet_cidr_block" {
   }
 }
 
-variable "availability_zone" {
-  description = "Availability Zone for subnet and EFS mount target."
+variable "availability_zone_letter" {
+  description = "Availability Zone letter suffix (e.g., 'a', 'b', 'c') to be appended to the region."
   type        = string
+  default     = "a"
 
   validation {
-    condition     = length(var.availability_zone) > 0
-    error_message = "You must provide a valid AWS availability zone."
+    condition     = can(regex("^[a-z]$", var.availability_zone_letter))
+    error_message = "Availability zone letter must be a single lowercase letter (a-z)."
   }
 }
 

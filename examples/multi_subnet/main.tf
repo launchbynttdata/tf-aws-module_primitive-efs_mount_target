@@ -30,16 +30,16 @@ resource "aws_vpc" "this" {
 
 # Subnets across multiple AZs - using count for dynamic creation
 resource "aws_subnet" "this" {
-  count = length(var.subnet_configs)
+  count = length(local.subnet_configs_with_full_az)
 
   vpc_id            = aws_vpc.this.id
-  cidr_block        = var.subnet_configs[count.index].cidr_block
-  availability_zone = var.subnet_configs[count.index].availability_zone
+  cidr_block        = local.subnet_configs_with_full_az[count.index].cidr_block
+  availability_zone = local.subnet_configs_with_full_az[count.index].availability_zone
 
   tags = {
-    Name        = "${var.project_name}-subnet-${var.subnet_configs[count.index].availability_zone}"
+    Name        = "${var.project_name}-subnet-${local.subnet_configs_with_full_az[count.index].availability_zone}"
     Environment = var.environment
-    AZ          = var.subnet_configs[count.index].availability_zone
+    AZ          = local.subnet_configs_with_full_az[count.index].availability_zone
   }
 }
 
@@ -100,15 +100,23 @@ module "aws_efs_file_system" {
   }
 }
 
-# Local to determine which mount targets should be created
-# This allows flexible control from tests or variables
+# Local values for subnet and mount target configuration
 locals {
+  # Construct full AZ names from region and letters
+  subnet_configs_with_full_az = [
+    for config in var.subnet_configs : {
+      cidr_block        = config.cidr_block
+      availability_zone = "${var.region}${config.az_letter}"
+      az_letter         = config.az_letter
+    }
+  ]
+
   # Create a map of mount targets based on enabled_subnet_indices
   # Keys are static (az-a, az-b, az-c) so they're known at plan time
   # This prevents the "unknown values in for_each" error
   all_mount_targets = {
-    for idx, config in var.subnet_configs :
-    "az-${substr(config.availability_zone, -1, 1)}" => {
+    for idx, config in local.subnet_configs_with_full_az :
+    "az-${config.az_letter}" => {
       subnet_id          = aws_subnet.this[idx].id
       ip_address         = null
       security_group_ids = null # Will use default
@@ -118,7 +126,7 @@ locals {
   # Filter based on enabled_subnet_indices if provided
   enabled_mount_targets = var.enabled_subnet_indices != null && length(var.enabled_subnet_indices) > 0 ? {
     for idx in var.enabled_subnet_indices :
-    "az-${substr(var.subnet_configs[idx].availability_zone, -1, 1)}" => local.all_mount_targets["az-${substr(var.subnet_configs[idx].availability_zone, -1, 1)}"]
+    "az-${local.subnet_configs_with_full_az[idx].az_letter}" => local.all_mount_targets["az-${local.subnet_configs_with_full_az[idx].az_letter}"]
   } : local.all_mount_targets
 }
 
