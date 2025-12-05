@@ -117,9 +117,7 @@ locals {
   all_mount_targets = {
     for idx, config in local.subnet_configs_with_full_az :
     "az-${config.az_letter}" => {
-      subnet_id          = aws_subnet.this[idx].id
-      ip_address         = null
-      security_group_ids = null # Will use default
+      subnet_id = aws_subnet.this[idx].id
     }
   }
 
@@ -131,19 +129,22 @@ locals {
 }
 
 # EFS mount target module usage
+# The module is now called once per mount target using for_each
+# Each module invocation creates a single mount target
 # Using map with static keys (az-a, az-b, az-c) ensures:
 # 1. Keys are known at plan time (no "unknown values in for_each" error)
 # 2. Mount targets are not rebuilt when configurations change
 # 3. Resource addresses are stable and readable
 module "efs_mount_target" {
-  source = "../../"
+  source   = "../../"
+  for_each = local.enabled_mount_targets
 
   efs_filesystem_id = module.aws_efs_file_system.file_system_id
 
-  # Map-based configuration with static keys
-  mount_targets = local.enabled_mount_targets
+  # Individual mount target configuration
+  subnet_id = each.value.subnet_id
 
-  # Default security groups for all mount targets
+  # Security groups for all mount targets
   security_group_ids = [aws_security_group.efs.id]
 
   # Optional: Custom timeouts for testing

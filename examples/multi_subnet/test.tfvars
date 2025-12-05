@@ -1,7 +1,7 @@
 # Multi-subnet example configuration
 # This demonstrates EFS mount targets across multiple availability zones
 
-region       = "us-east-2"
+region       = "us-west-2"
 project_name = "efs-mt-test"
 environment  = "test"
 

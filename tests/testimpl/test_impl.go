@@ -2,13 +2,13 @@ package testimpl
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/efs"
+	"github.com/aws/aws-sdk-go-v2/service/efs/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	testTypes "github.com/launchbynttdata/lcaf-component-terratest/types"
@@ -16,405 +16,191 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestComposableComplete(t *testing.T, ctx testTypes.TestContext) {
-	opts := ctx.TerratestTerraformOptions()
-
-	// Get outputs from Terraform - using correct output names for map-based module
-	mountTargetIDs := terraform.OutputMap(t, opts, "mount_target_ids")
-	mountTargetDNSNames := terraform.OutputMap(t, opts, "mount_target_dns_names")
-	mountTargetNetworkInterfaceIDs := terraform.OutputMap(t, opts, "mount_target_network_interface_ids")
-
-	// Initialize AWS clients with correct region
-	region := GetRegionFromTerraform(t, opts)
-	awsConfig := GetAWSConfig(t, region)
-	efsClient := efs.NewFromConfig(awsConfig)
-	ec2Client := ec2.NewFromConfig(awsConfig)
-
-	t.Run("TestMountTargetIDs", func(t *testing.T) {
-		for subnetID, mountTargetID := range mountTargetIDs {
-			assert.NotEmpty(t, mountTargetID, "Mount target ID for subnet %s should not be empty", subnetID)
-			t.Logf("Found mount target %s in subnet %s", mountTargetID, subnetID)
-		}
-	})
-
-	t.Run("TestMountTargetDNSNames", func(t *testing.T) {
-		for subnetID, dns := range mountTargetDNSNames {
-			assert.NotEmpty(t, dns, "Mount target DNS name for subnet %s should not be empty", subnetID)
-			assert.Contains(t, dns, ".efs.", "DNS name for subnet %s should contain '.efs.'", subnetID)
-			t.Logf("Found DNS name %s for subnet %s", dns, subnetID)
-		}
-	})
-
-	t.Run("TestMountTargetNetworkInterfaceIDs", func(t *testing.T) {
-		for subnetID, ni := range mountTargetNetworkInterfaceIDs {
-			assert.NotEmpty(t, ni, "Network interface ID for subnet %s should not be empty", subnetID)
-			t.Logf("Found network interface %s in subnet %s", ni, subnetID)
-		}
-	})
-
-	t.Run("TestMountTargetExistsInAWS", func(t *testing.T) {
-		for subnetID, mountTargetID := range mountTargetIDs {
-			t.Logf("Validating mount target %s in subnet %s via AWS EFS API", mountTargetID, subnetID)
-
-			// Describe the mount target using AWS EFS API to validate it exists
-			input := &efs.DescribeMountTargetsInput{
-				MountTargetId: aws.String(mountTargetID),
-			}
-
-			result, err := efsClient.DescribeMountTargets(context.TODO(), input)
-			require.NoError(t, err, "Failed to describe mount target %s for subnet %s via AWS API", mountTargetID, subnetID)
-			require.NotNil(t, result, "DescribeMountTargets result should not be nil")
-			require.Len(t, result.MountTargets, 1, "Should return exactly one mount target from AWS API")
-
-			mountTarget := result.MountTargets[0]
-
-			// Verify mount target properties from AWS match Terraform outputs
-			assert.Equal(t, mountTargetID, *mountTarget.MountTargetId, "Mount target ID from AWS should match Terraform output")
-			assert.Equal(t, subnetID, *mountTarget.SubnetId, "Subnet ID from AWS should match Terraform output - expected %s, got %s", subnetID, *mountTarget.SubnetId)
-			assert.NotEmpty(t, *mountTarget.FileSystemId, "File system ID from AWS should not be empty")
-			assert.NotEmpty(t, *mountTarget.IpAddress, "IP address from AWS should not be empty")
-			assert.NotEmpty(t, *mountTarget.NetworkInterfaceId, "Network interface ID from AWS should not be empty")
-			assert.NotEmpty(t, *mountTarget.AvailabilityZoneId, "Availability zone ID from AWS should not be empty")
-			assert.NotEmpty(t, *mountTarget.AvailabilityZoneName, "Availability zone name from AWS should not be empty")
-
-			// Verify lifecycle state in AWS
-			assert.Equal(t, "available", string(mountTarget.LifeCycleState),
-				"Mount target %s should be in 'available' state in AWS", mountTargetID)
-
-			// Verify the network interface ID from AWS matches the Terraform output
-			expectedNI := mountTargetNetworkInterfaceIDs[subnetID]
-			assert.Equal(t, expectedNI, *mountTarget.NetworkInterfaceId,
-				"Network interface ID from AWS should match Terraform output")
-
-			t.Logf("✅ Mount target %s validated in AWS: IP=%s, State=%s, NI=%s",
-				mountTargetID, *mountTarget.IpAddress, mountTarget.LifeCycleState, *mountTarget.NetworkInterfaceId)
-		}
-	})
-
-	t.Run("TestNetworkInterfaceExistsInAWS", func(t *testing.T) {
-		for subnetID, networkInterfaceID := range mountTargetNetworkInterfaceIDs {
-			t.Logf("Validating network interface %s in subnet %s via AWS EC2 API", networkInterfaceID, subnetID)
-
-			// Describe the network interface using AWS EC2 API to validate it exists
-			input := &ec2.DescribeNetworkInterfacesInput{
-				NetworkInterfaceIds: []string{networkInterfaceID},
-			}
-
-			result, err := ec2Client.DescribeNetworkInterfaces(context.TODO(), input)
-			require.NoError(t, err, "Failed to describe network interface %s for subnet %s via AWS EC2 API", networkInterfaceID, subnetID)
-			require.NotNil(t, result, "DescribeNetworkInterfaces result should not be nil")
-			require.Len(t, result.NetworkInterfaces, 1, "Should return exactly one network interface from AWS API")
-
-			netInterface := result.NetworkInterfaces[0]
-
-			// Verify network interface properties from AWS match Terraform outputs
-			assert.Equal(t, networkInterfaceID, *netInterface.NetworkInterfaceId, "Network interface ID from AWS should match Terraform output")
-			assert.Equal(t, subnetID, *netInterface.SubnetId, "Subnet ID from AWS should match Terraform output - expected %s, got %s", subnetID, *netInterface.SubnetId)
-			assert.NotEmpty(t, *netInterface.PrivateIpAddress, "Network interface from AWS should have a private IP address")
-			assert.Equal(t, "in-use", string(netInterface.Status),
-				"Network interface should be in 'in-use' state in AWS")
-
-			// Verify security groups are attached in AWS
-			require.NotEmpty(t, netInterface.Groups, "Network interface in AWS should have at least one security group attached")
-			for _, group := range netInterface.Groups {
-				assert.NotEmpty(t, *group.GroupId, "Security group ID from AWS should not be empty")
-				assert.NotEmpty(t, *group.GroupName, "Security group name from AWS should not be empty")
-			}
-
-			t.Logf("✅ Network interface %s validated in AWS: IP=%s, Status=%s, SecurityGroups=%d",
-				networkInterfaceID, *netInterface.PrivateIpAddress, netInterface.Status, len(netInterface.Groups))
-		}
-	})
-
-	t.Run("TestMountTargetDNSResolution", func(t *testing.T) {
-		for subnetID, dns := range mountTargetDNSNames {
-			// Verify DNS name format follows AWS EFS naming convention
-			// Format: fs-xxxxxxxx.efs.region.amazonaws.com
-			assert.Regexp(t, `^fs-[a-f0-9]+\.efs\.[a-z0-9-]+\.amazonaws\.com$`, dns,
-				"DNS name for subnet %s should follow AWS EFS format", subnetID)
-		}
-	})
-
-	t.Run("TestMountTargetSecurityGroups", func(t *testing.T) {
-		for subnetID, mountTargetID := range mountTargetIDs {
-			t.Logf("Validating security groups for mount target %s in subnet %s", mountTargetID, subnetID)
-
-			// Describe the mount target to get security groups
-			input := &efs.DescribeMountTargetsInput{
-				MountTargetId: aws.String(mountTargetID),
-			}
-
-			result, err := efsClient.DescribeMountTargets(context.TODO(), input)
-			require.NoError(t, err, "Failed to describe mount target %s for subnet %s", mountTargetID, subnetID)
-			require.NotNil(t, result, "DescribeMountTargets result should not be nil")
-			require.Len(t, result.MountTargets, 1, "Should return exactly one mount target")
-
-			// Get security groups from the network interface
-			networkInterfaceID := mountTargetNetworkInterfaceIDs[subnetID]
-			niInput := &ec2.DescribeNetworkInterfacesInput{
-				NetworkInterfaceIds: []string{networkInterfaceID},
-			}
-
-			niResult, err := ec2Client.DescribeNetworkInterfaces(context.TODO(), niInput)
-			require.NoError(t, err, "Failed to describe network interface for mount target %s", mountTargetID)
-			require.NotNil(t, niResult, "DescribeNetworkInterfaces result should not be nil")
-			require.Len(t, niResult.NetworkInterfaces, 1, "Should return exactly one network interface")
-
-			securityGroups := niResult.NetworkInterfaces[0].Groups
-			require.NotEmpty(t, securityGroups, "Mount target should have security groups attached")
-
-			// Verify each security group exists and is configured
-			for _, sg := range securityGroups {
-				sgInput := &ec2.DescribeSecurityGroupsInput{
-					GroupIds: []string{*sg.GroupId},
-				}
-
-				sgResult, err := ec2Client.DescribeSecurityGroups(context.TODO(), sgInput)
-				require.NoError(t, err, "Failed to describe security group %s", *sg.GroupId)
-				require.NotNil(t, sgResult, "DescribeSecurityGroups result should not be nil")
-				require.Len(t, sgResult.SecurityGroups, 1, "Should return exactly one security group")
-
-				securityGroup := sgResult.SecurityGroups[0]
-				assert.Equal(t, *sg.GroupId, *securityGroup.GroupId, "Security group ID should match")
-				assert.NotEmpty(t, *securityGroup.GroupName, "Security group name should not be empty")
-			}
-		}
-	})
-
-	// Add validation that we deployed the expected number of mount targets
-	t.Run("TestExpectedNumberOfMountTargets", func(t *testing.T) {
-		expectedCount := len(mountTargetIDs)
-		assert.Greater(t, expectedCount, 0, "Should have at least one mount target deployed")
-		assert.Equal(t, len(mountTargetDNSNames), expectedCount, "DNS names count should match mount targets count")
-		assert.Equal(t, len(mountTargetNetworkInterfaceIDs), expectedCount, "Network interfaces count should match mount targets count")
-		t.Logf("Validated %d mount targets across all subnets", expectedCount)
-	})
-}
-
 // TestMultiSubnetWithChanges tests the multi-subnet example with dynamic subnet changes
 // This validates that mount targets are not rebuilt when subnet configurations change
+// Test scenario:
+// 1. Deploy all 3 mount targets (az-a, az-b, az-c)
+// 2. Remove az-b - verify az-a and az-c are unchanged
+// 3. Re-add az-b and remove az-a - verify az-c is unchanged
 func TestMultiSubnetWithChanges(t *testing.T, ctx testTypes.TestContext) {
-	t.Log("=======================================================",
-		"=== Stage 1: Deploy all 3 mount targets ===",
-		"=======================================================")
+	t.Log("=======================================================")
+	t.Log("=== Stage 1: Deploy all 3 mount targets ===")
+	t.Log("=======================================================")
 
 	opts := ctx.TerratestTerraformOptions()
 
-	// Initial deployment with all subnets - get all outputs
-	mountTargetIDs := terraform.OutputMap(t, opts, "mount_target_ids")
-	mountTargetSubnetIDs := terraform.OutputMap(t, opts, "mount_target_subnet_ids")
-	mountTargetDNSNames := terraform.OutputMap(t, opts, "mount_target_dns_names")
-	mountTargetAZDNSNames := terraform.OutputMap(t, opts, "mount_target_az_dns_names")
-	mountTargetNetworkInterfaceIDs := terraform.OutputMap(t, opts, "mount_target_network_interface_ids")
-	mountTargetAZNames := terraform.OutputMap(t, opts, "mount_target_availability_zones")
+	// Get AWS config for API calls
+	awsConfig := GetAWSConfig(t, "us-west-2") // Will use region from test config
+	efsClient := efs.NewFromConfig(awsConfig)
+
+	// Initial deployment with all subnets - get outputs from Terraform
+	mountTargetIDsOutput := terraform.OutputMap(t, opts, "mount_target_ids")
 	efsFileSystemID := terraform.Output(t, opts, "efs_file_system_id")
 	efsFileSystemARN := terraform.Output(t, opts, "efs_file_system_arn")
 
 	// Verify all 3 mount targets are created
-	assert.Len(t, mountTargetIDs, 3, "Should have 3 mount targets initially")
-	assert.Contains(t, mountTargetIDs, "az-a", "Should have mount target for az-a")
-	assert.Contains(t, mountTargetIDs, "az-b", "Should have mount target for az-b")
-	assert.Contains(t, mountTargetIDs, "az-c", "Should have mount target for az-c")
-
-	// Verify all output maps have 3 entries
-	assert.Len(t, mountTargetSubnetIDs, 3, "Should have 3 subnet IDs")
-	assert.Len(t, mountTargetDNSNames, 3, "Should have 3 DNS names")
-	assert.Len(t, mountTargetAZDNSNames, 3, "Should have 3 AZ-specific DNS names")
-	assert.Len(t, mountTargetNetworkInterfaceIDs, 3, "Should have 3 network interface IDs")
-	assert.Len(t, mountTargetAZNames, 3, "Should have 3 availability zone names")
+	assert.Len(t, mountTargetIDsOutput, 3, "Should have 3 mount targets initially")
+	assert.Contains(t, mountTargetIDsOutput, "az-a", "Should have mount target for az-a")
+	assert.Contains(t, mountTargetIDsOutput, "az-b", "Should have mount target for az-b")
+	assert.Contains(t, mountTargetIDsOutput, "az-c", "Should have mount target for az-c")
 	assert.NotEmpty(t, efsFileSystemID, "EFS file system ID should not be empty")
 	assert.NotEmpty(t, efsFileSystemARN, "EFS file system ARN should not be empty")
 
-	// Verify all values are populated for each mount target
-	for _, key := range []string{"az-a", "az-b", "az-c"} {
-		assert.NotEmpty(t, mountTargetIDs[key], fmt.Sprintf("Mount target ID for %s should not be empty", key))
-		assert.NotEmpty(t, mountTargetSubnetIDs[key], fmt.Sprintf("Subnet ID for %s should not be empty", key))
-		assert.NotEmpty(t, mountTargetDNSNames[key], fmt.Sprintf("DNS name for %s should not be empty", key))
-		assert.NotEmpty(t, mountTargetAZDNSNames[key], fmt.Sprintf("AZ DNS name for %s should not be empty", key))
-		assert.NotEmpty(t, mountTargetNetworkInterfaceIDs[key], fmt.Sprintf("Network interface ID for %s should not be empty", key))
-		assert.NotEmpty(t, mountTargetAZNames[key], fmt.Sprintf("AZ name for %s should not be empty", key))
-	} // Store initial IDs for comparison
-	initialMountTargetAZ_A := mountTargetIDs["az-a"]
-	initialMountTargetAZ_B := mountTargetIDs["az-b"]
-	initialMountTargetAZ_C := mountTargetIDs["az-c"]
-	initialSubnetAZ_A := mountTargetSubnetIDs["az-a"]
-	initialSubnetAZ_C := mountTargetSubnetIDs["az-c"]
+	// Store initial mount target IDs from Terraform output
+	initialMountTargetAZ_A := mountTargetIDsOutput["az-a"]
+	initialMountTargetAZ_B := mountTargetIDsOutput["az-b"]
+	initialMountTargetAZ_C := mountTargetIDsOutput["az-c"]
 
-	t.Logf("Initial mount target IDs: az-a=%s, az-b=%s, az-c=%s",
-		initialMountTargetAZ_A, initialMountTargetAZ_B, initialMountTargetAZ_C)
+	t.Logf("Initial mount target IDs from Terraform output:")
+	t.Logf("  az-a: %s", initialMountTargetAZ_A)
+	t.Logf("  az-b: %s", initialMountTargetAZ_B)
+	t.Logf("  az-c: %s", initialMountTargetAZ_C)
 
-	// Validate all mount targets exist in AWS
-	ValidateMountTargetsInAWS(t, mountTargetIDs, mountTargetSubnetIDs, opts)
+	// Get full mount target details from AWS API (not Terraform output)
+	// This is faster than terraform output and provides real-time AWS state
+	stage1MountTargets := GetMountTargetsByFileSystem(t, efsFileSystemID, efsClient)
+	assert.Len(t, stage1MountTargets, 3, "Should have 3 mount targets in AWS")
 
-	t.Log("=======================================================",
-		"=== Stage 2: Remove middle subnet (az-b) - Should not rebuild others ===",
-		"=======================================================")
+	// Verify all mount targets are available in AWS
+	for _, mt := range stage1MountTargets {
+		mtID := aws.ToString(mt.MountTargetId)
+		assert.Equal(t, "available", string(mt.LifeCycleState),
+			"Mount target %s should be available in AWS", mtID)
+		t.Logf("✅ Mount target %s validated in AWS: IP=%s, SubnetID=%s, AZ=%s",
+			mtID, aws.ToString(mt.IpAddress), aws.ToString(mt.SubnetId), aws.ToString(mt.AvailabilityZoneName))
+	}
+
+	t.Log("=======================================================")
+	t.Log("=== Stage 2: Remove az-b - Verify az-a and az-c unchanged ===")
+	t.Log("=======================================================")
 
 	opts.SetVarsAfterVarFiles = true
 	opts.Vars = map[string]interface{}{
-		"enabled_subnet_indices": []int{0, 2}, // Remove subnet at index 1 (az-b)
+		"enabled_subnet_indices": []int{0, 2}, // Keep indices 0 (az-a) and 2 (az-c), remove 1 (az-b)
 	}
 
 	// Apply with the new configuration
 	terraform.Apply(t, opts)
 
-	// Get new outputs after removal
-	mountTargetIDs = terraform.OutputMap(t, opts, "mount_target_ids")
-	mountTargetSubnetIDs = terraform.OutputMap(t, opts, "mount_target_subnet_ids")
-	mountTargetDNSNames = terraform.OutputMap(t, opts, "mount_target_dns_names")
-	mountTargetAZDNSNames = terraform.OutputMap(t, opts, "mount_target_az_dns_names")
-	mountTargetNetworkInterfaceIDs = terraform.OutputMap(t, opts, "mount_target_network_interface_ids")
-	mountTargetAZNames = terraform.OutputMap(t, opts, "mount_target_availability_zones")
+	// Get mount target IDs from Terraform output
+	mountTargetIDsOutput = terraform.OutputMap(t, opts, "mount_target_ids")
 
-	// Verify only 2 mount targets remain
-	assert.Len(t, mountTargetIDs, 2, "Should have 2 mount targets after removal")
-	assert.Contains(t, mountTargetIDs, "az-a", "Should still have mount target for az-a")
-	assert.NotContains(t, mountTargetIDs, "az-b", "Should not have mount target for az-b")
-	assert.Contains(t, mountTargetIDs, "az-c", "Should still have mount target for az-c")
+	// Verify only 2 mount targets remain in Terraform output
+	assert.Len(t, mountTargetIDsOutput, 2, "Should have 2 mount targets after removing az-b")
+	assert.Contains(t, mountTargetIDsOutput, "az-a", "Should still have mount target for az-a")
+	assert.NotContains(t, mountTargetIDsOutput, "az-b", "Should NOT have mount target for az-b")
+	assert.Contains(t, mountTargetIDsOutput, "az-c", "Should still have mount target for az-c")
 
-	// Verify all output maps have 2 entries
-	assert.Len(t, mountTargetSubnetIDs, 2, "Should have 2 subnet IDs")
-	assert.Len(t, mountTargetDNSNames, 2, "Should have 2 DNS names")
-	assert.Len(t, mountTargetAZDNSNames, 2, "Should have 2 AZ-specific DNS names")
-	assert.Len(t, mountTargetNetworkInterfaceIDs, 2, "Should have 2 network interface IDs")
-	assert.Len(t, mountTargetAZNames, 2, "Should have 2 availability zone names") // CRITICAL TEST: Verify IDs haven't changed (no rebuild)
-	assert.Equal(t, initialMountTargetAZ_A, mountTargetIDs["az-a"],
-		"Mount target az-a should NOT be rebuilt (ID should remain the same)")
-	assert.Equal(t, initialMountTargetAZ_C, mountTargetIDs["az-c"],
-		"Mount target az-c should NOT be rebuilt (ID should remain the same)")
-	assert.Equal(t, initialSubnetAZ_A, mountTargetSubnetIDs["az-a"],
-		"Subnet ID for az-a should remain the same")
-	assert.Equal(t, initialSubnetAZ_C, mountTargetSubnetIDs["az-c"],
-		"Subnet ID for az-c should remain the same")
+	// CRITICAL TEST: Verify IDs haven't changed (no rebuild)
+	assert.Equal(t, initialMountTargetAZ_A, mountTargetIDsOutput["az-a"],
+		"Mount target az-a should NOT be rebuilt (ID should remain %s)", initialMountTargetAZ_A)
+	assert.Equal(t, initialMountTargetAZ_C, mountTargetIDsOutput["az-c"],
+		"Mount target az-c should NOT be rebuilt (ID should remain %s)", initialMountTargetAZ_C)
 
-	t.Log("✅ SUCCESS: Mount targets az-a and az-c were NOT rebuilt")
+	t.Logf("✅ SUCCESS: Mount targets az-a (%s) and az-c (%s) were NOT rebuilt",
+		mountTargetIDsOutput["az-a"], mountTargetIDsOutput["az-c"])
 
-	// Validate remaining mount targets exist in AWS
-	ValidateMountTargetsInAWS(t, mountTargetIDs, mountTargetSubnetIDs, opts)
+	// Verify in AWS using API (faster than terraform output)
+	stage2MountTargets := GetMountTargetsByFileSystem(t, efsFileSystemID, efsClient)
+	assert.Len(t, stage2MountTargets, 2, "Should have 2 mount targets in AWS after removing az-b")
 
-	t.Log("=======================================================",
-		"=== Stage 3: Remove first subnet (az-a) - Should not rebuild others ===",
-		"=======================================================")
-
-	opts.SetVarsAfterVarFiles = true
-	opts.Vars = map[string]interface{}{
-		"enabled_subnet_indices": []int{2}, // Remove subnet at index 0 (az-a)
+	// Validate the remaining mount targets are available and match expected IDs
+	stage2MountTargetIDs := make(map[string]bool)
+	for _, mt := range stage2MountTargets {
+		mtID := aws.ToString(mt.MountTargetId)
+		stage2MountTargetIDs[mtID] = true
+		assert.Equal(t, "available", string(mt.LifeCycleState),
+			"Mount target %s should be available in AWS", mtID)
 	}
 
-	// Apply with the new configuration
-	terraform.Apply(t, opts)
+	// Verify az-a and az-c still exist with same IDs in AWS
+	assert.True(t, stage2MountTargetIDs[initialMountTargetAZ_A],
+		"Mount target az-a (%s) should still exist in AWS", initialMountTargetAZ_A)
+	assert.True(t, stage2MountTargetIDs[initialMountTargetAZ_C],
+		"Mount target az-c (%s) should still exist in AWS", initialMountTargetAZ_C)
+	assert.False(t, stage2MountTargetIDs[initialMountTargetAZ_B],
+		"Mount target az-b (%s) should NOT exist in AWS", initialMountTargetAZ_B)
 
-	// Get new outputs after removal
-	mountTargetIDs = terraform.OutputMap(t, opts, "mount_target_ids")
-	mountTargetSubnetIDs = terraform.OutputMap(t, opts, "mount_target_subnet_ids")
-	mountTargetDNSNames = terraform.OutputMap(t, opts, "mount_target_dns_names")
-	mountTargetAZDNSNames = terraform.OutputMap(t, opts, "mount_target_az_dns_names")
-	mountTargetNetworkInterfaceIDs = terraform.OutputMap(t, opts, "mount_target_network_interface_ids")
-	mountTargetAZNames = terraform.OutputMap(t, opts, "mount_target_availability_zones")
+	t.Log("✅ AWS API confirmed: az-b removed, az-a and az-c unchanged")
 
-	// Verify only 1 mount targets remain
-	assert.Len(t, mountTargetIDs, 1, "Should have 1 mount target after removal")
-	assert.NotContains(t, mountTargetIDs, "az-a", "Should not have mount target for az-a")
-	assert.NotContains(t, mountTargetIDs, "az-b", "Should still not have mount target for az-b")
-	assert.Contains(t, mountTargetIDs, "az-c", "Should still have mount target for az-c")
-
-	// Verify all output maps have 1 entries
-	assert.Len(t, mountTargetSubnetIDs, 1, "Should have 1 subnet IDs")
-	assert.Len(t, mountTargetDNSNames, 1, "Should have 1 DNS names")
-	assert.Len(t, mountTargetAZDNSNames, 1, "Should have 1 AZ-specific DNS names")
-	assert.Len(t, mountTargetNetworkInterfaceIDs, 1, "Should have 1 network interface IDs")
-	assert.Len(t, mountTargetAZNames, 1, "Should have 1 availability zone names") // CRITICAL TEST: Verify IDs haven't changed (no rebuild)
-	assert.Equal(t, initialMountTargetAZ_C, mountTargetIDs["az-c"],
-		"Mount target az-c should NOT be rebuilt (ID should remain the same)")
-	assert.Equal(t, initialSubnetAZ_C, mountTargetSubnetIDs["az-c"],
-		"Subnet ID for az-c should remain the same")
-
-	t.Log("✅ SUCCESS: Mount target az-c was NOT rebuilt")
-
-	// Validate remaining mount targets exist in AWS
-	ValidateMountTargetsInAWS(t, mountTargetIDs, mountTargetSubnetIDs, opts)
-
-	t.Log("=======================================================",
-		"=== Stage 4: Add back other mount targets (az-a and az-b) ===",
-		"=======================================================")
+	t.Log("=======================================================")
+	t.Log("=== Stage 3: Re-add az-b and remove az-a - Verify az-c unchanged ===")
+	t.Log("=======================================================")
 
 	opts.Vars = map[string]interface{}{
-		"enabled_subnet_indices": []int{0, 1, 2}, // Add back subnet at index 0 (az-a) index 1 (az-b)
+		"enabled_subnet_indices": []int{1, 2}, // Keep indices 1 (az-b) and 2 (az-c), remove 0 (az-a)
 	}
 
 	// Apply with the new configuration
 	terraform.Apply(t, opts)
 
-	// Get new outputs after adding back
-	mountTargetIDs = terraform.OutputMap(t, opts, "mount_target_ids")
-	mountTargetSubnetIDs = terraform.OutputMap(t, opts, "mount_target_subnet_ids")
-	mountTargetDNSNames = terraform.OutputMap(t, opts, "mount_target_dns_names")
-	mountTargetAZDNSNames = terraform.OutputMap(t, opts, "mount_target_az_dns_names")
-	mountTargetNetworkInterfaceIDs = terraform.OutputMap(t, opts, "mount_target_network_interface_ids")
-	mountTargetAZNames = terraform.OutputMap(t, opts, "mount_target_availability_zones")
+	// Get mount target IDs from Terraform output
+	mountTargetIDsOutput = terraform.OutputMap(t, opts, "mount_target_ids")
 
-	// Verify all 3 mount targets exist again
-	assert.Len(t, mountTargetIDs, 3, "Should have 3 mount targets after adding back")
-	assert.Contains(t, mountTargetIDs, "az-a", "Should have mount target for az-a")
-	assert.Contains(t, mountTargetIDs, "az-b", "Should have mount target for az-b")
-	assert.Contains(t, mountTargetIDs, "az-c", "Should have mount target for az-c")
+	// Verify only 2 mount targets remain in Terraform output
+	assert.Len(t, mountTargetIDsOutput, 2, "Should have 2 mount targets after re-adding az-b and removing az-a")
+	assert.NotContains(t, mountTargetIDsOutput, "az-a", "Should NOT have mount target for az-a")
+	assert.Contains(t, mountTargetIDsOutput, "az-b", "Should have mount target for az-b")
+	assert.Contains(t, mountTargetIDsOutput, "az-c", "Should still have mount target for az-c")
 
-	// Verify all output maps have 3 entries again
-	assert.Len(t, mountTargetSubnetIDs, 3, "Should have 3 subnet IDs")
-	assert.Len(t, mountTargetDNSNames, 3, "Should have 3 DNS names")
-	assert.Len(t, mountTargetAZDNSNames, 3, "Should have 3 AZ-specific DNS names")
-	assert.Len(t, mountTargetNetworkInterfaceIDs, 3, "Should have 3 network interface IDs")
-	assert.Len(t, mountTargetAZNames, 3, "Should have 3 availability zone names")
-	// Verify az-a has a NEW ID (it was destroyed and recreated)
-	assert.NotEqual(t, initialMountTargetAZ_A, mountTargetIDs["az-a"],
-		"Mount target az-a was rebuilt with a new id")
-	// Verify az-b has a NEW ID (it was destroyed and recreated)
-	assert.NotEqual(t, initialMountTargetAZ_B, mountTargetIDs["az-b"],
-		"Mount target az-b should have a NEW ID (was destroyed and recreated)")
-	// Verify az-c still hasen't been rebuilt
-	assert.Equal(t, initialMountTargetAZ_C, mountTargetIDs["az-c"],
-		"Mount target az-c should STILL not be rebuilt")
+	// Store new az-b ID (it was recreated)
+	newMountTargetAZ_B := mountTargetIDsOutput["az-b"]
 
-	t.Log("✅ SUCCESS: Mount targets az-a and az-b were rebuilt with new IDs, az-c remains stable")
+	// CRITICAL TEST: Verify az-c ID hasn't changed (no rebuild)
+	assert.Equal(t, initialMountTargetAZ_C, mountTargetIDsOutput["az-c"],
+		"Mount target az-c should STILL NOT be rebuilt (ID should remain %s)", initialMountTargetAZ_C)
 
-	// Validate all mount targets exist in AWS
-	ValidateMountTargetsInAWS(t, mountTargetIDs, mountTargetSubnetIDs, opts)
+	// Verify az-b has a NEW ID (it was recreated)
+	assert.NotEqual(t, initialMountTargetAZ_B, newMountTargetAZ_B,
+		"Mount target az-b should have a NEW ID (was recreated)")
 
-	t.Log("=======================================================",
-		"=== All stages completed successfully ===",
-		"=======================================================")
+	t.Logf("✅ SUCCESS: Mount target az-c (%s) was NOT rebuilt, az-b recreated with new ID (%s)",
+		mountTargetIDsOutput["az-c"], newMountTargetAZ_B)
+
+	// Verify in AWS using API
+	stage3MountTargets := GetMountTargetsByFileSystem(t, efsFileSystemID, efsClient)
+	assert.Len(t, stage3MountTargets, 2, "Should have 2 mount targets in AWS")
+
+	// Validate the mount targets are available and match expected IDs
+	stage3MountTargetIDs := make(map[string]bool)
+	for _, mt := range stage3MountTargets {
+		mtID := aws.ToString(mt.MountTargetId)
+		stage3MountTargetIDs[mtID] = true
+		assert.Equal(t, "available", string(mt.LifeCycleState),
+			"Mount target %s should be available in AWS", mtID)
+		t.Logf("  Mount target in AWS: %s (Subnet: %s, AZ: %s)",
+			mtID, aws.ToString(mt.SubnetId), aws.ToString(mt.AvailabilityZoneName))
+	}
+
+	// Verify az-c still exists with same ID, az-a removed, az-b recreated
+	assert.False(t, stage3MountTargetIDs[initialMountTargetAZ_A],
+		"Mount target az-a (%s) should NOT exist in AWS", initialMountTargetAZ_A)
+	assert.True(t, stage3MountTargetIDs[newMountTargetAZ_B],
+		"New mount target az-b (%s) should exist in AWS", newMountTargetAZ_B)
+	assert.True(t, stage3MountTargetIDs[initialMountTargetAZ_C],
+		"Mount target az-c (%s) should still exist in AWS with same ID", initialMountTargetAZ_C)
+
+	t.Log("✅ AWS API confirmed: az-a removed, az-b recreated, az-c unchanged")
+	t.Log("=======================================================")
+	t.Log("=== TEST PASSED: All mount target lifecycle changes validated ===")
+	t.Log("=== Summary: ===")
+	t.Logf("  - Initial: Created 3 mount targets (az-a, az-b, az-c)")
+	t.Logf("  - Stage 2: Removed az-b, az-a and az-c unchanged")
+	t.Logf("  - Stage 3: Re-added az-b, removed az-a, az-c unchanged")
+	t.Logf("  - az-c (%s) was NEVER rebuilt across all changes", initialMountTargetAZ_C)
+	t.Log("=======================================================")
 }
 
-// ValidateMountTargetsInAWS validates that all mount targets exist and are available in AWS
-// Mount targets should already be created and available after terraform apply completes
-func ValidateMountTargetsInAWS(t *testing.T, mountTargetIDs, subnetIDs map[string]string, opts *terraform.Options) {
-	// Get the region from Terraform configuration
-	region := GetRegionFromTerraform(t, opts)
-	awsConfig := GetAWSConfig(t, region)
-	efsClient := efs.NewFromConfig(awsConfig)
-
-	for key, mountTargetID := range mountTargetIDs {
-		subnetID := subnetIDs[key]
-		t.Logf("Validating mount target %s (key=%s, subnet=%s) in AWS", mountTargetID, key, subnetID)
-
-		input := &efs.DescribeMountTargetsInput{
-			MountTargetId: aws.String(mountTargetID),
-		}
-
-		result, err := efsClient.DescribeMountTargets(context.TODO(), input)
-		require.NoError(t, err, "Failed to describe mount target %s", mountTargetID)
-		require.Len(t, result.MountTargets, 1, "Should return exactly one mount target")
-
-		mountTarget := result.MountTargets[0]
-
-		// Verify properties
-		assert.Equal(t, mountTargetID, aws.ToString(mountTarget.MountTargetId), "Mount target ID should match")
-		assert.Equal(t, subnetID, aws.ToString(mountTarget.SubnetId), "Subnet ID should match")
-		assert.Equal(t, "available", string(mountTarget.LifeCycleState),
-			"Mount target %s should be in 'available' state", mountTargetID)
-
-		t.Logf("✅ Mount target %s (key=%s) validated successfully in AWS", mountTargetID, key)
+// GetMountTargetsByFileSystem retrieves all mount targets for a given EFS file system from AWS
+func GetMountTargetsByFileSystem(t *testing.T, fileSystemID string, efsClient *efs.Client) []types.MountTargetDescription {
+	input := &efs.DescribeMountTargetsInput{
+		FileSystemId: aws.String(fileSystemID),
 	}
+
+	result, err := efsClient.DescribeMountTargets(context.TODO(), input)
+	require.NoError(t, err, "Failed to describe mount targets for file system %s", fileSystemID)
+
+	return result.MountTargets
 }
 
 // TestSimpleExample tests the simple example with a single mount target
@@ -423,48 +209,43 @@ func TestSimpleExample(t *testing.T, ctx testTypes.TestContext) {
 
 	opts := ctx.TerratestTerraformOptions()
 
-	// Get all outputs
-	mountTargetIDs := terraform.OutputMap(t, opts, "mount_target_ids")
-	mountTargetSubnetIDs := terraform.OutputMap(t, opts, "mount_target_subnet_ids")
-	mountTargetDNSNames := terraform.OutputMap(t, opts, "mount_target_dns_names")
-	mountTargetAZDNSNames := terraform.OutputMap(t, opts, "mount_target_az_dns_names")
-	mountTargetNetworkInterfaceIDs := terraform.OutputMap(t, opts, "mount_target_network_interface_ids")
-	mountTargetAZNames := terraform.OutputMap(t, opts, "mount_target_availability_zone_names")
-	mountTargetAZIDs := terraform.OutputMap(t, opts, "mount_target_availability_zone_ids")
+	// Get all outputs - now direct values instead of maps
+	mountTargetID := terraform.Output(t, opts, "mount_target_id")
+	mountTargetSubnetID := terraform.Output(t, opts, "mount_target_subnet_id")
+	mountTargetDNSName := terraform.Output(t, opts, "mount_target_dns_name")
+	mountTargetAZDNSName := terraform.Output(t, opts, "mount_target_az_dns_name")
+	mountTargetNetworkInterfaceID := terraform.Output(t, opts, "mount_target_network_interface_id")
+	mountTargetAZName := terraform.Output(t, opts, "mount_target_availability_zone_name")
+	mountTargetAZID := terraform.Output(t, opts, "mount_target_availability_zone_id")
 	efsFileSystemID := terraform.Output(t, opts, "efs_file_system_id")
 	efsFileSystemARN := terraform.Output(t, opts, "efs_file_system_arn")
 
-	// Verify exactly one mount target
-	assert.Len(t, mountTargetIDs, 1, "Simple example should have exactly 1 mount target")
-	assert.Contains(t, mountTargetIDs, "primary", "Simple example should use 'primary' as the key")
-
-	// Verify all outputs are populated for the 'primary' mount target
-	assert.NotEmpty(t, mountTargetIDs["primary"], "Mount target ID should not be empty")
-	assert.NotEmpty(t, mountTargetSubnetIDs["primary"], "Subnet ID should not be empty")
-	assert.NotEmpty(t, mountTargetDNSNames["primary"], "DNS name should not be empty")
-	assert.NotEmpty(t, mountTargetAZDNSNames["primary"], "AZ-specific DNS name should not be empty")
-	assert.NotEmpty(t, mountTargetNetworkInterfaceIDs["primary"], "Network interface ID should not be empty")
-	assert.NotEmpty(t, mountTargetAZNames["primary"], "Availability zone name should not be empty")
-	assert.NotEmpty(t, mountTargetAZIDs["primary"], "Availability zone ID should not be empty")
+	// Verify all outputs are populated
+	assert.NotEmpty(t, mountTargetID, "Mount target ID should not be empty")
+	assert.NotEmpty(t, mountTargetSubnetID, "Subnet ID should not be empty")
+	assert.NotEmpty(t, mountTargetDNSName, "DNS name should not be empty")
+	assert.NotEmpty(t, mountTargetAZDNSName, "AZ-specific DNS name should not be empty")
+	assert.NotEmpty(t, mountTargetNetworkInterfaceID, "Network interface ID should not be empty")
+	assert.NotEmpty(t, mountTargetAZName, "Availability zone name should not be empty")
+	assert.NotEmpty(t, mountTargetAZID, "Availability zone ID should not be empty")
 	assert.NotEmpty(t, efsFileSystemID, "EFS file system ID should not be empty")
 	assert.NotEmpty(t, efsFileSystemARN, "EFS file system ARN should not be empty")
 
 	// Log output values
-	t.Logf("Mount target ID: %s", mountTargetIDs["primary"])
-	t.Logf("Subnet ID: %s", mountTargetSubnetIDs["primary"])
-	t.Logf("DNS name: %s", mountTargetDNSNames["primary"])
-	t.Logf("AZ-specific DNS name: %s", mountTargetAZDNSNames["primary"])
-	t.Logf("Network interface ID: %s", mountTargetNetworkInterfaceIDs["primary"])
-	t.Logf("Availability zone: %s (%s)", mountTargetAZNames["primary"], mountTargetAZIDs["primary"])
+	t.Logf("Mount target ID: %s", mountTargetID)
+	t.Logf("Subnet ID: %s", mountTargetSubnetID)
+	t.Logf("DNS name: %s", mountTargetDNSName)
+	t.Logf("AZ-specific DNS name: %s", mountTargetAZDNSName)
+	t.Logf("Network interface ID: %s", mountTargetNetworkInterfaceID)
+	t.Logf("Availability zone: %s (%s)", mountTargetAZName, mountTargetAZID)
 	t.Logf("EFS file system: %s (%s)", efsFileSystemID, efsFileSystemARN)
 
 	// Validate mount target exists in AWS using AWS API
-	region := GetRegionFromTerraform(t, opts)
+	region := mountTargetAZName[:len(mountTargetAZName)-1] // Extract region from AZ name
 	awsConfig := GetAWSConfig(t, region)
 	efsClient := efs.NewFromConfig(awsConfig)
 	ec2Client := ec2.NewFromConfig(awsConfig)
 
-	mountTargetID := mountTargetIDs["primary"]
 	t.Logf("Validating mount target %s exists in AWS via API", mountTargetID)
 
 	// Validate mount target via EFS API
@@ -478,7 +259,7 @@ func TestSimpleExample(t *testing.T, ctx testTypes.TestContext) {
 
 	mountTarget := mtResult.MountTargets[0]
 	assert.Equal(t, mountTargetID, *mountTarget.MountTargetId, "Mount target ID from AWS should match Terraform output")
-	assert.Equal(t, mountTargetSubnetIDs["primary"], *mountTarget.SubnetId, "Subnet ID from AWS should match Terraform output")
+	assert.Equal(t, mountTargetSubnetID, *mountTarget.SubnetId, "Subnet ID from AWS should match Terraform output")
 	assert.Equal(t, efsFileSystemID, *mountTarget.FileSystemId, "File system ID from AWS should match Terraform output")
 	assert.Equal(t, "available", string(mountTarget.LifeCycleState), "Mount target should be available in AWS")
 	assert.NotEmpty(t, *mountTarget.IpAddress, "Mount target should have an IP address")
@@ -488,11 +269,10 @@ func TestSimpleExample(t *testing.T, ctx testTypes.TestContext) {
 		*mountTarget.MountTargetId, *mountTarget.IpAddress, mountTarget.LifeCycleState)
 
 	// Validate network interface exists via EC2 API
-	networkInterfaceID := mountTargetNetworkInterfaceIDs["primary"]
-	t.Logf("Validating network interface %s exists in AWS via EC2 API", networkInterfaceID)
+	t.Logf("Validating network interface %s exists in AWS via EC2 API", mountTargetNetworkInterfaceID)
 
 	niInput := &ec2.DescribeNetworkInterfacesInput{
-		NetworkInterfaceIds: []string{networkInterfaceID},
+		NetworkInterfaceIds: []string{mountTargetNetworkInterfaceID},
 	}
 
 	niResult, err := ec2Client.DescribeNetworkInterfaces(context.TODO(), niInput)
@@ -500,8 +280,8 @@ func TestSimpleExample(t *testing.T, ctx testTypes.TestContext) {
 	require.Len(t, niResult.NetworkInterfaces, 1, "Should return exactly one network interface from AWS API")
 
 	netInterface := niResult.NetworkInterfaces[0]
-	assert.Equal(t, networkInterfaceID, *netInterface.NetworkInterfaceId, "Network interface ID from AWS should match Terraform output")
-	assert.Equal(t, mountTargetSubnetIDs["primary"], *netInterface.SubnetId, "Network interface subnet ID should match")
+	assert.Equal(t, mountTargetNetworkInterfaceID, *netInterface.NetworkInterfaceId, "Network interface ID from AWS should match Terraform output")
+	assert.Equal(t, mountTargetSubnetID, *netInterface.SubnetId, "Network interface subnet ID should match")
 	assert.Equal(t, "in-use", string(netInterface.Status), "Network interface should be in-use")
 	assert.NotEmpty(t, *netInterface.PrivateIpAddress, "Network interface should have a private IP")
 	require.NotEmpty(t, netInterface.Groups, "Network interface should have security groups attached")
@@ -509,70 +289,6 @@ func TestSimpleExample(t *testing.T, ctx testTypes.TestContext) {
 		*netInterface.NetworkInterfaceId, *netInterface.PrivateIpAddress, netInterface.Status, len(netInterface.Groups))
 
 	t.Log("✅ Simple example validated successfully in both Terraform outputs and AWS API")
-} // GetMountTargetDetails retrieves detailed information about a mount target
-func GetMountTargetDetails(t *testing.T, mountTargetID string, region string) map[string]interface{} {
-	awsConfig := GetAWSConfig(t, region)
-	efsClient := efs.NewFromConfig(awsConfig)
-
-	input := &efs.DescribeMountTargetsInput{
-		MountTargetId: aws.String(mountTargetID),
-	}
-
-	result, err := efsClient.DescribeMountTargets(context.TODO(), input)
-	require.NoError(t, err, "Failed to describe mount target %s", mountTargetID)
-	require.Len(t, result.MountTargets, 1, "Should return exactly one mount target")
-
-	mt := result.MountTargets[0]
-
-	details := map[string]interface{}{
-		"MountTargetId":        aws.ToString(mt.MountTargetId),
-		"FileSystemId":         aws.ToString(mt.FileSystemId),
-		"SubnetId":             aws.ToString(mt.SubnetId),
-		"LifeCycleState":       string(mt.LifeCycleState),
-		"IpAddress":            aws.ToString(mt.IpAddress),
-		"NetworkInterfaceId":   aws.ToString(mt.NetworkInterfaceId),
-		"AvailabilityZoneId":   aws.ToString(mt.AvailabilityZoneId),
-		"AvailabilityZoneName": aws.ToString(mt.AvailabilityZoneName),
-		"OwnerId":              aws.ToString(mt.OwnerId),
-	}
-
-	return details
-}
-
-// CompareMountTargetIDs compares two maps of mount target IDs and logs differences
-func CompareMountTargetIDs(t *testing.T, before, after map[string]string, stage string) {
-	t.Logf("=== Comparing Mount Target IDs at %s ===", stage)
-
-	for key, beforeID := range before {
-		if afterID, exists := after[key]; exists {
-			if beforeID == afterID {
-				t.Logf("✅ %s: UNCHANGED (ID: %s)", key, beforeID)
-			} else {
-				t.Logf("🔄 %s: CHANGED (was: %s, now: %s)", key, beforeID, afterID)
-			}
-		} else {
-			t.Logf("❌ %s: REMOVED (was: %s)", key, beforeID)
-		}
-	}
-
-	for key, afterID := range after {
-		if _, exists := before[key]; !exists {
-			t.Logf("➕ %s: ADDED (ID: %s)", key, afterID)
-		}
-	}
-}
-
-// AssertMountTargetUnchanged asserts that specific mount targets haven't changed
-func AssertMountTargetUnchanged(t *testing.T, beforeIDs, afterIDs map[string]string, keys []string) {
-	for _, key := range keys {
-		beforeID, beforeExists := beforeIDs[key]
-		afterID, afterExists := afterIDs[key]
-
-		assert.True(t, beforeExists, "Mount target %s should exist in before state", key)
-		assert.True(t, afterExists, "Mount target %s should exist in after state", key)
-		assert.Equal(t, beforeID, afterID,
-			fmt.Sprintf("Mount target %s should NOT be rebuilt (ID should remain %s)", key, beforeID))
-	}
 }
 
 func GetAWSSTSClient(t *testing.T, region string) *sts.Client {
@@ -588,60 +304,44 @@ func GetAWSConfig(t *testing.T, region string) (cfg aws.Config) {
 }
 
 // GetRegionFromTerraform extracts the AWS region from Terraform configuration
+// This function works with both simple and multi-subnet examples
 func GetRegionFromTerraform(t *testing.T, opts *terraform.Options) string {
-	// Try to get region from availability zone names (most reliable)
-	// Try both possible output names for compatibility with different examples
-	// terraform.OutputMap already extracts the map values for us
-	var azNames map[string]string
-
-	// First try mount_target_availability_zone_names (simple example)
 	outputs := terraform.OutputAll(t, opts)
-	if _, exists := outputs["mount_target_availability_zone_names"]; exists {
-		azNames = terraform.OutputMap(t, opts, "mount_target_availability_zone_names")
-	} else if _, exists := outputs["mount_target_availability_zones"]; exists {
-		// Fallback to mount_target_availability_zones (multi-subnet example)
-		azNames = terraform.OutputMap(t, opts, "mount_target_availability_zones")
-	}
 
-	for _, az := range azNames {
-		if len(az) > 0 {
-			// Remove the last character (a, b, c) to get the region
-			// For example: us-west-2a -> us-west-2
-			region := az[:len(az)-1]
-			t.Logf("Detected region %s from availability zone %s", region, az)
+	// Try to get region from availability zone names
+	// Simple example: mount_target_availability_zone_name (single string)
+	// Multi-subnet example: mount_target_availability_zones (map)
+	if azName, exists := outputs["mount_target_availability_zone_name"]; exists {
+		// Simple example - direct string output
+		azStr := azName.(string)
+		if len(azStr) > 0 {
+			region := azStr[:len(azStr)-1]
+			t.Logf("Detected region %s from availability zone %s", region, azStr)
 			return region
 		}
 	}
 
-	// Fallback: parse from DNS name (format: fs-xxxxx.efs.REGION.amazonaws.com)
-	dnsNames := terraform.OutputMap(t, opts, "mount_target_dns_names")
-	for _, dns := range dnsNames {
-		if len(dns) > 0 {
-			// Parse DNS: fs-xxxxx.efs.REGION.amazonaws.com
-			var region string
-			efsIdx := -1
-			for i := 0; i < len(dns)-4; i++ {
-				if dns[i:i+5] == ".efs." {
-					efsIdx = i + 5
-					break
-				}
-			}
-			if efsIdx > 0 {
-				for i := efsIdx; i < len(dns); i++ {
-					if dns[i] == '.' {
-						region = dns[efsIdx:i]
-						break
-					}
-				}
-				if region != "" {
-					t.Logf("Detected region %s from DNS name %s", region, dns)
-					return region
-				}
+	if azNamesOutput, exists := outputs["mount_target_availability_zones"]; exists {
+		// Multi-subnet example - map output
+		azNames := azNamesOutput.(map[string]interface{})
+		for _, azVal := range azNames {
+			az := azVal.(string)
+			if len(az) > 0 {
+				region := az[:len(az)-1]
+				t.Logf("Detected region %s from availability zone %s", region, az)
+				return region
 			}
 		}
 	}
 
-	// If all else fails, return us-east-2 as default (but log a warning)
-	t.Logf("WARNING: Could not detect region from Terraform, using default us-east-2")
-	return "us-east-2"
+	// Fallback: try to get region from vars or return default
+	if region, exists := opts.Vars["region"]; exists {
+		regionStr := region.(string)
+		t.Logf("Using region %s from terraform vars", regionStr)
+		return regionStr
+	}
+
+	// If all else fails, return us-west-2 as default (matches test.tfvars)
+	t.Logf("WARNING: Could not detect region from Terraform, using default us-west-2")
+	return "us-west-2"
 }

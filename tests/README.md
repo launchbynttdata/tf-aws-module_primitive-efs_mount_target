@@ -48,36 +48,58 @@ tests/
 **Purpose**: Contains the actual test logic shared by both test folders.
 
 **Components**:
-- `test_impl.go`: Implements `TestComposableComplete()` function with all test cases
+- `test_impl.go`: Implements test functions with AWS API validation
 - `types.go`: Defines the module-specific test configuration type
 
 ## Test Cases
 
-The test suite validates both Terraform outputs and actual AWS resource state:
+The test suite validates both Terraform outputs and actual AWS resource state using AWS API calls for performance.
 
-### Output Validation Tests
-1. **TestMountTargetIDs**: Verifies mount target IDs are not empty
-2. **TestMountTargetDNSNames**: Validates DNS names contain `.efs.` and are properly formatted
-3. **TestMountTargetNetworkInterfaceIDs**: Confirms network interface IDs exist
+### TestSimpleExample
+Tests the simple example with a single mount target:
 
-### AWS Resource Tests
-4. **TestMountTargetExistsInAWS**: Queries EFS API to verify:
+1. **Output Validation**: Verifies all Terraform outputs are populated
+   - Mount target ID, subnet ID, DNS names
+   - Network interface ID, availability zone information
+   - EFS file system ID and ARN
+
+2. **AWS EFS API Validation**: Queries EFS API to verify:
    - Mount target exists and is in 'available' state
-   - Properties match expected values (subnet ID, file system ID, etc.)
+   - Properties match Terraform outputs (subnet ID, file system ID, etc.)
    - Has valid IP address and availability zone information
 
-5. **TestNetworkInterfaceExistsInAWS**: Queries EC2 API to verify:
+3. **AWS EC2 API Validation**: Queries EC2 API to verify:
    - Network interface exists and is 'in-use'
    - Associated with correct subnet
    - Has security groups attached
    - Has a private IP address
 
-6. **TestMountTargetDNSResolution**: Validates DNS naming convention:
-   - Format: `fs-xxxxxxxx.efs.region.amazonaws.com`
+### TestMultiSubnetWithChanges
+Tests the multi-subnet example with infrastructure stability validation:
 
-7. **TestMountTargetSecurityGroups**: Verifies:
-   - Security groups are attached to the network interface
-   - Each security group exists and is properly configured
+**Stage 1: Deploy all 3 mount targets (az-a, az-b, az-c)**
+- Verifies 3 mount targets created via Terraform outputs
+- Stores initial mount target IDs for comparison
+- Validates all mount targets are available via AWS EFS API
+
+**Stage 2: Remove az-b - Verify az-a and az-c unchanged**
+- Applies with `enabled_subnet_indices = [0, 2]`
+- **Critical Test**: Asserts az-a and az-c IDs remain identical (no rebuild)
+- Uses AWS API to confirm only 2 mount targets exist
+- Validates az-b was removed, az-a and az-c are unchanged
+
+**Stage 3: Re-add az-b and remove az-a - Verify az-c unchanged**
+- Applies with `enabled_subnet_indices = [1, 2]`
+- **Critical Test**: Asserts az-c ID remains identical (never rebuilt across all changes)
+- Verifies az-b has a NEW ID (was recreated)
+- Uses AWS API to confirm final state
+- **Test passes when az-c remains stable throughout all changes**
+
+### Helper Functions
+
+- **GetMountTargetsByFileSystem**: Retrieves all mount targets for an EFS file system via AWS API (faster than terraform output)
+- **GetAWSConfig**: Creates AWS SDK configuration with proper region
+- **GetRegionFromTerraform**: Extracts AWS region from Terraform outputs or variables
 
 ## Running Tests
 
@@ -90,53 +112,50 @@ The test suite validates both Terraform outputs and actual AWS resource state:
    ```
 
 2. **AWS credentials**: Configure AWS credentials with permissions to:
-   - Create/read/delete EFS mount targets
+   - Create/read/delete EFS mount targets and file systems
+   - Create/read/delete VPCs, subnets, and security groups
    - Describe EC2 network interfaces and security groups
    - Read EFS file systems
 
-3. **Example configuration**: Ensure `examples/simple/test.tfvars` contains valid values
-   - Set `region` to your target AWS region (e.g., `us-east-2`)
-   - Set `availability_zone_letter` to a valid AZ suffix (e.g., `a`, `b`, or `c`)
-   - The full AZ name will be automatically constructed as `{region}{availability_zone_letter}`
+3. **Example configuration**:
+   - `examples/simple/test.tfvars` - Single mount target example
+   - `examples/multi_subnet/test.tfvars` - Multiple mount targets with dynamic changes
+   - Set `region` to your target AWS region (e.g., `us-west-2`)
+   - The full AZ names are automatically constructed as `{region}{availability_zone_letter}`
 
 ### Running Full Integration Tests
 
 From the repository root:
 
 ```bash
-# Run post_deploy_functional tests (full lifecycle)
-go test -v -timeout 30m ./tests/post_deploy_functional/
+# Run all post_deploy_functional tests (both examples, full lifecycle)
+go test -v -timeout 45m ./tests/post_deploy_functional/
 
-# Run with specific example folder
-cd tests/post_deploy_functional
-go test -v -timeout 30m
+# Run specific test only
+go test -v -timeout 30m ./tests/post_deploy_functional/ -run TestSimpleExample
+go test -v -timeout 45m ./tests/post_deploy_functional/ -run TestMultiSubnetExample
 ```
 
 **Expected flow**:
-1. Terraform applies the simple configuration
-2. Tests execute against deployed resources
-3. Terraform destroys all resources
-4. Test results are displayed
+1. Terraform applies the example configuration
+2. Tests execute against deployed resources using AWS API
+3. For multi-subnet test: applies multiple terraform configurations to test stability
+4. Terraform destroys all resources
+5. Test results are displayed with detailed AWS API validation
 
 ### Running Read-Only Tests
 
 Useful when you have already deployed infrastructure:
 
 ```bash
-# Run against existing infrastructure
-go test -v -timeout 10m ./tests/post_deploy_functional_readonly/
+# Run against existing simple example infrastructure
+go test -v -timeout 10m ./tests/post_deploy_functional_readonly/ -run TestSimpleExampleReadOnly
+
+# Run against existing multi-subnet infrastructure
+go test -v -timeout 15m ./tests/post_deploy_functional_readonly/ -run TestMultiSubnetExampleReadOnly
 ```
 
-**Note**: Ensure Terraform state exists in simple before running.
-
-### Running Specific Test Cases
-
-Run only specific subtests:
-
-```bash
-go test -v -timeout 30m ./tests/post_deploy_functional/ \
-  -run TestModule/TestMountTargetExistsInAWS
-```
+**Note**: Ensure Terraform state exists in the example directories before running read-only tests.
 
 ### Test Verbosity
 
@@ -239,27 +258,39 @@ aws efs describe-mount-targets --mount-target-id <id>
 
 To add new test cases:
 
-1. **Edit** test_impl.go
-2. **Add** a new `t.Run()` block in `TestComposableComplete()`
-3. **Use** the existing AWS clients (`efsClient`, `ec2Client`)
-4. **Follow** the pattern of existing tests
+1. **Edit** `testimpl/test_impl.go`
+2. **Create** a new test function following the pattern of existing tests
+3. **Use** AWS API calls for validation (faster than terraform output)
+4. **Add** test invocation in `post_deploy_functional/main_test.go` and `post_deploy_functional_readonly/main_test.go`
 
 Example:
 
 ```go
-t.Run("TestMyNewValidation", func(t *testing.T) {
-    for subnet, mountTargetID := range mountTargetIDs {
-        // Your test logic here
-        input := &efs.DescribeMountTargetsInput{
-            MountTargetId: aws.String(mountTargetID),
-        }
-        result, err := efsClient.DescribeMountTargets(context.TODO(), input)
-        require.NoError(t, err)
+// In testimpl/test_impl.go
+func TestMyNewExample(t *testing.T, ctx testTypes.TestContext) {
+    t.Log("=== Testing My New Example ===")
 
-        // Add assertions
-        assert.NotNil(t, result)
+    opts := ctx.TerratestTerraformOptions()
+
+    // Get Terraform outputs
+    mountTargetID := terraform.Output(t, opts, "mount_target_id")
+
+    // Validate via AWS API
+    region := "us-west-2" // or extract from outputs
+    awsConfig := GetAWSConfig(t, region)
+    efsClient := efs.NewFromConfig(awsConfig)
+
+    input := &efs.DescribeMountTargetsInput{
+        MountTargetId: aws.String(mountTargetID),
     }
-})
+    result, err := efsClient.DescribeMountTargets(context.TODO(), input)
+    require.NoError(t, err)
+    require.Len(t, result.MountTargets, 1)
+
+    // Add assertions
+    mt := result.MountTargets[0]
+    assert.Equal(t, "available", string(mt.LifeCycleState))
+}
 ```
 
 ## CI/CD Integration
@@ -282,12 +313,13 @@ Configure in repository settings:
 
 ## Best Practices
 
-1. **Always use timeouts**: EFS resources can take time to provision
-2. **Test both outputs and AWS state**: Outputs can be misleading
-3. **Clean up resources**: Use `defer` or framework cleanup
-4. **Use subtests**: Makes it easier to identify failures
-5. **Verify states**: Check resources are 'available', 'in-use', etc.
-6. **Test security**: Verify security group attachments
+1. **Always use timeouts**: EFS resources can take time to provision (use `-timeout 30m` or more)
+2. **Use AWS API for validation**: Much faster than `terraform output` commands
+3. **Test actual AWS state**: Terraform outputs can be cached; AWS API returns real-time state
+4. **Clean up resources**: Framework handles cleanup automatically
+5. **Verify lifecycle states**: Check resources are 'available', 'in-use', etc.
+6. **Test infrastructure stability**: Verify resource IDs don't change when configuration changes
+7. **Use GetMountTargetsByFileSystem**: Retrieve all mount targets in one API call instead of individual queries
 
 ## Additional Resources
 

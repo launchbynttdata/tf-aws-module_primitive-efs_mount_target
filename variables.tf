@@ -20,37 +20,24 @@ variable "delete_timeout" {
   type        = string
   default     = "10m"
 }
-variable "mount_targets" {
-  description = <<-EOT
-    Map of mount target configurations. Each key identifies a mount target (e.g., 'az-a', 'subnet-1').
-    This key-based approach ensures mount targets are not rebuilt when configurations change.
-
-    Each mount target supports:
-    - subnet_id: (Required) The subnet ID where the mount target will be created
-    - ip_address: (Optional) Static IP address for the mount target
-    - security_group_ids: (Optional) Security group IDs for this specific mount target
-  EOT
-  type = map(object({
-    subnet_id          = string
-    ip_address         = optional(string, null)
-    security_group_ids = optional(list(string), null)
-  }))
+variable "subnet_id" {
+  description = "(Required) The ID of the subnet in which to create the mount target. One mount target should be created per availability zone for high availability."
+  type        = string
 
   validation {
-    condition     = length(var.mount_targets) > 0
-    error_message = "You must provide at least one mount target configuration."
-  }
-
-  validation {
-    condition = alltrue([
-      for k, v in var.mount_targets : v.subnet_id != null && v.subnet_id != ""
-    ])
-    error_message = "Each mount target must have a valid subnet_id."
+    condition     = var.subnet_id != null && var.subnet_id != ""
+    error_message = "You must provide a valid subnet_id."
   }
 }
 
+variable "ip_address" {
+  description = "(Optional) Static IPv4 address for the mount target within the subnet's CIDR range. If not specified, AWS automatically assigns an available IP address from the subnet."
+  type        = string
+  default     = null
+}
+
 variable "security_group_ids" {
-  description = "(Optional) Default list of security group IDs for mount targets. Can be overridden per mount target. If not provided here or per mount target, AWS will use the VPC's default security group."
+  description = "(Optional) List of security group IDs for the mount target. If not provided, AWS will use the VPC's default security group."
   type        = list(string)
   default     = null
 

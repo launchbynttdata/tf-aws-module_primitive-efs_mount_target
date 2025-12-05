@@ -49,32 +49,32 @@ output "efs_file_system_arn" {
 
 output "mount_target_ids" {
   description = "Map of mount target key (e.g., 'az-a') to EFS mount target ID"
-  value       = module.efs_mount_target.mount_target_ids
+  value       = { for k, v in module.efs_mount_target : k => v.mount_target_id }
 }
 
 output "mount_target_subnet_ids" {
   description = "Map of mount target key to subnet ID"
-  value       = module.efs_mount_target.mount_target_subnet_ids
+  value       = { for k, v in module.efs_mount_target : k => v.mount_target_subnet_id }
 }
 
 output "mount_target_dns_names" {
   description = "Map of mount target key to EFS file system DNS name"
-  value       = module.efs_mount_target.mount_target_dns_names
+  value       = { for k, v in module.efs_mount_target : k => v.mount_target_dns_name }
 }
 
 output "mount_target_az_dns_names" {
   description = "Map of mount target key to mount target AZ-specific DNS name"
-  value       = module.efs_mount_target.mount_target_az_dns_names
+  value       = { for k, v in module.efs_mount_target : k => v.mount_target_az_dns_name }
 }
 
 output "mount_target_network_interface_ids" {
   description = "Map of mount target key to network interface ID"
-  value       = module.efs_mount_target.mount_target_network_interface_ids
+  value       = { for k, v in module.efs_mount_target : k => v.mount_target_network_interface_id }
 }
 
 output "mount_target_availability_zones" {
   description = "Map of mount target key to availability zone name"
-  value       = module.efs_mount_target.mount_target_availability_zone_names
+  value       = { for k, v in module.efs_mount_target : k => v.mount_target_availability_zone_name }
 }
 
 output "security_group_id" {

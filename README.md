@@ -171,24 +171,55 @@ locals {
 
 ## Overview
 
-This module creates AWS EFS mount targets in one or more subnets for a given EFS file system. It is a primitive module, focused on wrapping the [`aws_efs_mount_target`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_mount_target) resource, and is designed for use as a building block in larger infrastructure compositions.
+This primitive module creates a **single** AWS EFS mount target in a specified subnet for a given EFS file system. It wraps the [`aws_efs_mount_target`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_mount_target) resource and is designed to be called once per mount target, typically using `for_each` when multiple mount targets are needed.
 
 ## Features
 
-- Creates one EFS mount target per subnet
-- Supports multiple security groups
-- Validates required inputs
-- Exposes mount target IDs, DNS names, and network interface IDs
-- Follows Launch by NTT DATA module standards
+- **Single Mount Target Per Invocation**: Creates one mount target per module call
+- **Security Group Support**: Attach multiple security groups to the mount target
+- **Optional IP Address**: Specify a static IP or let AWS assign one automatically
+- **Input Validation**: Validates required parameters
+- **Comprehensive Outputs**: Exposes mount target ID, DNS names, network interface ID, and more
+- **Follows Launch by NTT DATA Standards**: Consistent patterns and best practices
 
 ## Usage
+
+### Single Mount Target
 
 ```hcl
 module "efs_mount_target" {
   source             = "launchbynttdata/efs_mount_target/aws"
   efs_filesystem_id  = "fs-12345678"
-  subnet_ids         = ["subnet-abc123", "subnet-def456"]
+  subnet_id          = "subnet-abc123"
   security_group_ids = ["sg-12345678"]
+}
+```
+
+### Multiple Mount Targets (Recommended Pattern)
+
+Use `for_each` to create multiple mount targets across availability zones:
+
+```hcl
+locals {
+  mount_targets = {
+    "az-a" = { subnet_id = "subnet-abc123" }
+    "az-b" = { subnet_id = "subnet-def456" }
+    "az-c" = { subnet_id = "subnet-ghi789" }
+  }
+}
+
+module "efs_mount_target" {
+  source   = "launchbynttdata/efs_mount_target/aws"
+  for_each = local.mount_targets
+
+  efs_filesystem_id  = "fs-12345678"
+  subnet_id          = each.value.subnet_id
+  security_group_ids = ["sg-12345678"]
+}
+
+# Access outputs
+output "mount_target_ids" {
+  value = { for k, v in module.efs_mount_target : k => v.mount_target_id }
 }
 ```
 
@@ -196,24 +227,57 @@ module "efs_mount_target" {
 
 | Name                | Description                                                        | Type         | Default | Required |
 |---------------------|--------------------------------------------------------------------|--------------|---------|:--------:|
-| subnet_ids          | List of subnet IDs where EFS mount targets should be created        | list(string) | n/a     | yes      |
-| security_group_ids  | List of security group IDs for the EFS mount targets               | list(string) | n/a     | yes      |
 | efs_filesystem_id   | The ID of the EFS file system                                      | string       | n/a     | yes      |
-| tags                | Map of tags to assign to resources that support tagging (unused)   | map(string)  | `{}`    | no       |
+| subnet_id           | The subnet ID where the mount target will be created               | string       | n/a     | yes      |
+| security_group_ids  | List of security group IDs for the mount target                    | list(string) | `null`  | no       |
+| ip_address          | Static IPv4 address for the mount target (optional)                | string       | `null`  | no       |
+| create_timeout      | Timeout for creating the mount target                              | string       | `"30m"` | no       |
+| delete_timeout      | Timeout for deleting the mount target                              | string       | `"10m"` | no       |
 
 ## Outputs
 
-| Name                           | Description                                              |
-|--------------------------------|----------------------------------------------------------|
-| mount_target_ids               | Map of subnet ID to EFS mount target ID                  |
-| mount_target_dns_names         | Map of subnet ID to EFS mount target DNS name            |
-| mount_target_network_interface_ids | Map of subnet ID to network interface ID created for the EFS mount target |
+| Name                               | Description                                              |
+|------------------------------------|----------------------------------------------------------|
+| mount_target_id                    | The ID of the EFS mount target                           |
+| mount_target_subnet_id             | The subnet ID where the mount target is located          |
+| mount_target_dns_name              | The DNS name for the EFS file system                     |
+| mount_target_az_dns_name           | The AZ-specific DNS name for the mount target            |
+| mount_target_file_system_arn       | The ARN of the EFS file system                           |
+| mount_target_network_interface_id  | The network interface ID for the mount target            |
+| mount_target_availability_zone_name| The availability zone name                               |
+| mount_target_availability_zone_id  | The availability zone ID                                 |
+| mount_target_owner_id              | The AWS account ID that owns the mount target            |
 
 ## Validation Rules
 
-- `subnet_ids` must be a non-empty list
-- `security_group_ids` must be a non-empty list
+- `subnet_id` must be a non-empty string
+- `security_group_ids` must be null or contain at least one security group ID
 - `efs_filesystem_id` must be a non-empty string
+
+## Why This Pattern?
+
+### Primitive Module Design
+
+This module creates **one mount target per invocation** following primitive module best practices:
+
+- **Simplicity**: Each module call has a clear, single responsibility
+- **Flexibility**: Callers control how mount targets are organized using `for_each` or `count`
+- **Stability**: Resource addresses are determined by the caller's `for_each` keys
+- **Composability**: Easy to integrate into higher-level modules
+
+### Benefits
+
+1. **Stable Infrastructure**: Using static keys in `for_each` prevents unnecessary rebuilds
+2. **Predictable Behavior**: Adding/removing mount targets only affects those specific resources
+3. **Clear Resource Addressing**: `module.efs_mount_target["az-a"]` is explicit and readable
+4. **Testability**: Simple to test individual mount target creation
+
+## Examples
+
+This repository includes two examples demonstrating different use cases:
+
+- **[simple](./examples/simple/)**: Basic single mount target deployment
+- **[multi_subnet](./examples/multi_subnet/)**: Multiple mount targets across availability zones using `for_each`
 
 ## Testing
 
@@ -230,11 +294,13 @@ cd examples/simple
 terraform init
 terraform plan -var-file=test.tfvars -out=the.tfplan
 terraform apply the.tfplan
+terraform destroy -var-file=test.tfvars
 ```
 
 ## AWS Documentation
 
 - [aws_efs_mount_target](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_mount_target)
+- [Amazon EFS: How It Works](https://docs.aws.amazon.com/efs/latest/ug/how-it-works.html)
 
 ## License
 
@@ -265,21 +331,22 @@ No modules.
 |------|-------------|------|---------|:--------:|
 | <a name="input_create_timeout"></a> [create\_timeout](#input\_create\_timeout) | (Optional) Timeout for creating the EFS mount target (e.g., '30m'). | `string` | `"30m"` | no |
 | <a name="input_delete_timeout"></a> [delete\_timeout](#input\_delete\_timeout) | (Optional) Timeout for deleting the EFS mount target (e.g., '10m'). | `string` | `"10m"` | no |
-| <a name="input_mount_targets"></a> [mount\_targets](#input\_mount\_targets) | Map of mount target configurations. Each key identifies a mount target (e.g., 'az-a', 'subnet-1').<br/>This key-based approach ensures mount targets are not rebuilt when configurations change.<br/><br/>Each mount target supports:<br/>- subnet\_id: (Required) The subnet ID where the mount target will be created<br/>- ip\_address: (Optional) Static IP address for the mount target<br/>- security\_group\_ids: (Optional) Security group IDs for this specific mount target | <pre>map(object({<br/>    subnet_id          = string<br/>    ip_address         = optional(string, null)<br/>    security_group_ids = optional(list(string), null)<br/>  }))</pre> | n/a | yes |
-| <a name="input_security_group_ids"></a> [security\_group\_ids](#input\_security\_group\_ids) | (Optional) Default list of security group IDs for mount targets. Can be overridden per mount target. If not provided here or per mount target, AWS will use the VPC's default security group. | `list(string)` | `null` | no |
+| <a name="input_subnet_id"></a> [subnet\_id](#input\_subnet\_id) | (Required) The ID of the subnet in which to create the mount target. One mount target should be created per availability zone for high availability. | `string` | n/a | yes |
+| <a name="input_ip_address"></a> [ip\_address](#input\_ip\_address) | (Optional) Static IPv4 address for the mount target within the subnet's CIDR range. If not specified, AWS automatically assigns an available IP address from the subnet. | `string` | `null` | no |
+| <a name="input_security_group_ids"></a> [security\_group\_ids](#input\_security\_group\_ids) | (Optional) List of security group IDs for the mount target. If not provided, AWS will use the VPC's default security group. | `list(string)` | `null` | no |
 | <a name="input_efs_filesystem_id"></a> [efs\_filesystem\_id](#input\_efs\_filesystem\_id) | The ID of the EFS file system. | `string` | n/a | yes |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
-| <a name="output_mount_target_ids"></a> [mount\_target\_ids](#output\_mount\_target\_ids) | Map of mount target key to EFS mount target ID. |
-| <a name="output_mount_target_subnet_ids"></a> [mount\_target\_subnet\_ids](#output\_mount\_target\_subnet\_ids) | Map of mount target key to subnet ID. |
-| <a name="output_mount_target_dns_names"></a> [mount\_target\_dns\_names](#output\_mount\_target\_dns\_names) | Map of mount target key to EFS file system DNS name (file-system-id.efs.aws-region.amazonaws.com). |
-| <a name="output_mount_target_az_dns_names"></a> [mount\_target\_az\_dns\_names](#output\_mount\_target\_az\_dns\_names) | Map of mount target key to mount target AZ-specific DNS name (availability-zone.file-system-id.efs.aws-region.amazonaws.com). |
-| <a name="output_mount_target_file_system_arns"></a> [mount\_target\_file\_system\_arns](#output\_mount\_target\_file\_system\_arns) | Map of mount target key to EFS file system ARN. |
-| <a name="output_mount_target_network_interface_ids"></a> [mount\_target\_network\_interface\_ids](#output\_mount\_target\_network\_interface\_ids) | Map of mount target key to network interface ID created for the EFS mount target. |
-| <a name="output_mount_target_availability_zone_names"></a> [mount\_target\_availability\_zone\_names](#output\_mount\_target\_availability\_zone\_names) | Map of mount target key to the name of the Availability Zone (AZ) that the mount target resides in. |
-| <a name="output_mount_target_availability_zone_ids"></a> [mount\_target\_availability\_zone\_ids](#output\_mount\_target\_availability\_zone\_ids) | Map of mount target key to the unique identifier of the Availability Zone (AZ) that the mount target resides in. |
-| <a name="output_mount_target_owner_ids"></a> [mount\_target\_owner\_ids](#output\_mount\_target\_owner\_ids) | Map of mount target key to AWS account ID that owns the mount target resource. |
+| <a name="output_mount_target_id"></a> [mount\_target\_id](#output\_mount\_target\_id) | The ID of the EFS mount target. |
+| <a name="output_mount_target_subnet_id"></a> [mount\_target\_subnet\_id](#output\_mount\_target\_subnet\_id) | The ID of the subnet the mount target is in. |
+| <a name="output_mount_target_dns_name"></a> [mount\_target\_dns\_name](#output\_mount\_target\_dns\_name) | The DNS name of the EFS file system (file-system-id.efs.aws-region.amazonaws.com). |
+| <a name="output_mount_target_az_dns_name"></a> [mount\_target\_az\_dns\_name](#output\_mount\_target\_az\_dns\_name) | The mount target's availability zone-specific DNS name (availability-zone.file-system-id.efs.aws-region.amazonaws.com). |
+| <a name="output_mount_target_file_system_arn"></a> [mount\_target\_file\_system\_arn](#output\_mount\_target\_file\_system\_arn) | Amazon Resource Name (ARN) of the EFS file system. |
+| <a name="output_mount_target_network_interface_id"></a> [mount\_target\_network\_interface\_id](#output\_mount\_target\_network\_interface\_id) | The ID of the network interface created for the EFS mount target. |
+| <a name="output_mount_target_availability_zone_name"></a> [mount\_target\_availability\_zone\_name](#output\_mount\_target\_availability\_zone\_name) | The name of the Availability Zone (AZ) that the mount target resides in. |
+| <a name="output_mount_target_availability_zone_id"></a> [mount\_target\_availability\_zone\_id](#output\_mount\_target\_availability\_zone\_id) | The unique identifier of the Availability Zone (AZ) that the mount target resides in. |
+| <a name="output_mount_target_owner_id"></a> [mount\_target\_owner\_id](#output\_mount\_target\_owner\_id) | AWS account ID that owns the mount target resource. |
 <!-- END_TF_DOCS -->

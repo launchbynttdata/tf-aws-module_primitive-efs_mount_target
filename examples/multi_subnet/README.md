@@ -1,9 +1,10 @@
 # Multi-Subnet EFS Mount Target Example
 
-This example demonstrates creating EFS mount targets across multiple availability zones with stable infrastructure when subnets are added or removed.
+This example demonstrates creating EFS mount targets across multiple availability zones with stable infrastructure when subnets are added or removed. The primitive module is called once per mount target using a `for_each` loop.
 
 ## Key Features
 
+- **Single Mount Target Per Module Invocation**: The primitive module creates one mount target; caller uses `for_each` to create multiple
 - **Region-Aware Configuration**: Automatically constructs full AZ names from region + letter suffix
 - **Simplified AZ Specification**: Use single letters ('a', 'b', 'c') instead of full AZ names like 'us-east-2a'
 - **Multiple Availability Zones**: Creates mount targets in 3 different AZs
@@ -186,20 +187,38 @@ func TestEFSMountTarget_AddSubnetBack(t *testing.T) {
 
 ## Important Notes
 
-### Why Static AZ Letter Keys?
+### Architecture: Module Called Per Mount Target
 
-The module uses static AZ letter keys for mount targets:
+The primitive module creates **one mount target per invocation**. This example uses `for_each` to call the module multiple times:
 
 ```hcl
-mount_targets = {
-  "az-a" => { subnet_id = aws_subnet.this[0].id, ... }
-  "az-b" => { subnet_id = aws_subnet.this[1].id, ... }
-  "az-c" => { subnet_id = aws_subnet.this[2].id, ... }
+# Local creates a map with static AZ letter keys
+locals {
+  all_mount_targets = {
+    for idx, config in local.subnet_configs_with_full_az :
+    "az-${config.az_letter}" => {
+      subnet_id = aws_subnet.this[idx].id
+    }
+  }
+}
+
+# Module is called once per mount target using for_each
+module "efs_mount_target" {
+  source   = "../../"
+  for_each = local.enabled_mount_targets
+
+  efs_filesystem_id  = module.aws_efs_file_system.file_system_id
+  subnet_id          = each.value.subnet_id
+  security_group_ids = [aws_security_group.efs.id]
 }
 ```
 
+### Why Static AZ Letter Keys?
+
+The example uses static AZ letter keys for mount targets (az-a, az-b, az-c):
+
 This approach ensures:
-- **Stable resource addresses**: Each mount target's Terraform address is based on the AZ letter (az-a, az-b, az-c), not list position
+- **Stable resource addresses**: Each mount target's Terraform address is based on the AZ letter, not list position
 - **No rebuilds on configuration changes**: Changing subnet configs doesn't affect existing mount targets
 - **Predictable operations**: Adding/removing subnets only affects those specific mount targets
 - **Known at plan time**: Static keys avoid "unknown values in for_each" errors
@@ -210,12 +229,21 @@ Using list indices as keys would cause rebuilds:
 
 ```hcl
 # DON'T DO THIS - causes rebuilds when list order changes
-for_each = { for idx, config in var.subnet_configs : idx => config }
+for_each = { for idx, config in var.subnet_configs : tostring(idx) => config }
 ```
 
 With this approach, removing subnet at index 1 would:
 1. Destroy mount target at index 1
 2. **Destroy and recreate** mount target at index 2 (because it becomes index 1)
+
+### Validation Tests Performed
+
+The following test scenarios have been validated:
+
+1. **Initial deployment with all 3 subnets** - All mount targets created successfully
+2. **Remove az-b (middle subnet)** - Only az-b mount target destroyed, az-a and az-c unchanged
+3. **Remove az-a, re-add az-b** - Only az-a destroyed and az-b recreated, az-c unchanged
+4. **Destroy all** - Clean teardown of all resources
 
 ## Variables
 
