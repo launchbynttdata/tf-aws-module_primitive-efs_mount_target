@@ -2,6 +2,7 @@ package testimpl
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -29,15 +30,15 @@ func TestMultiSubnetWithChanges(t *testing.T, ctx testTypes.TestContext) {
 
 	opts := ctx.TerratestTerraformOptions()
 
-	// Get AWS config for API calls
-	region := GetRegion(t, opts)
-	awsConfig := GetAWSConfig(t, region)
-	efsClient := efs.NewFromConfig(awsConfig)
-
 	// Initial deployment with all subnets - get outputs from Terraform
 	mountTargetIDsOutput := terraform.OutputMap(t, opts, "mount_target_ids")
 	efsFileSystemID := terraform.Output(t, opts, "efs_file_system_id")
 	efsFileSystemARN := terraform.Output(t, opts, "efs_file_system_arn")
+
+	// Extract region from EFS ARN and configure AWS SDK
+	region := GetRegionFromARN(t, efsFileSystemARN)
+	awsConfig := GetAWSConfig(t, region)
+	efsClient := efs.NewFromConfig(awsConfig)
 
 	// Verify all 3 mount targets are created
 	assert.Len(t, mountTargetIDsOutput, 3, "Should have 3 mount targets initially")
@@ -241,8 +242,8 @@ func TestSimpleExample(t *testing.T, ctx testTypes.TestContext) {
 	t.Logf("Availability zone: %s (%s)", mountTargetAZName, mountTargetAZID)
 	t.Logf("EFS file system: %s (%s)", efsFileSystemID, efsFileSystemARN)
 
-	// Validate mount target exists in AWS using AWS API
-	region := GetRegion(t, opts)
+	// Extract region from EFS ARN and configure AWS SDK
+	region := GetRegionFromARN(t, efsFileSystemARN)
 	awsConfig := GetAWSConfig(t, region)
 	efsClient := efs.NewFromConfig(awsConfig)
 	ec2Client := ec2.NewFromConfig(awsConfig)
@@ -304,14 +305,18 @@ func GetAWSConfig(t *testing.T, region string) (cfg aws.Config) {
 	return cfg
 }
 
-// GetRegion safely extracts the region from terraform vars with validation
-func GetRegion(t *testing.T, opts *terraform.Options) string {
-	if region, exists := opts.Vars["region"]; exists {
-		regionStr := region.(string)
-		require.NotEmpty(t, regionStr, "region variable is set but empty")
-		t.Logf("Using region %s from terraform vars", regionStr)
-		return regionStr
-	}
-	require.Fail(t, "region variable not found in terraform vars - ensure your example sets it")
-	return ""
+// GetRegionFromARN extracts the AWS region from an ARN
+// ARN format: arn:aws:elasticfilesystem:{region}:{account-id}:file-system/{fs-id}
+func GetRegionFromARN(t *testing.T, arn string) string {
+	require.NotEmpty(t, arn, "ARN cannot be empty")
+
+	// Split ARN by colons
+	parts := strings.Split(arn, ":")
+	require.GreaterOrEqual(t, len(parts), 4, "Invalid ARN format: %s", arn)
+
+	region := parts[3]
+	require.NotEmpty(t, region, "Region not found in ARN: %s", arn)
+	t.Logf("Extracted region %s from ARN: %s", region, arn)
+
+	return region
 }

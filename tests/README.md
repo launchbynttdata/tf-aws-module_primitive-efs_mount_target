@@ -99,7 +99,7 @@ Tests the multi-subnet example with infrastructure stability validation:
 
 - **GetMountTargetsByFileSystem**: Retrieves all mount targets for an EFS file system via AWS API (faster than terraform output)
 - **GetAWSConfig**: Creates AWS SDK configuration with proper region
-- **GetRegion**: Safely extracts the AWS region from Terraform vars with validation
+- **GetRegionFromARN**: Extracts the AWS region from an EFS ARN (eliminates need for region variable in tests)
 
 ## Running Tests
 

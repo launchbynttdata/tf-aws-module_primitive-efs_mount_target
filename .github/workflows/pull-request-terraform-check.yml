@@ -10,16 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  setup:
-    name: "Setup Environment"
-    runs-on: ubuntu-latest
-    steps:
-      - name: set GO_LINT_TIMEOUT
-        run: echo "GO_LINT_TIMEOUT=" ${GO_LINT_TIMEOUT}
-        env:
-          GO_LINT_TIMEOUT: 30m
   check:
-    needs: setup
     name: "Check AWS Terraform Code"
     permissions:
       contents: read
