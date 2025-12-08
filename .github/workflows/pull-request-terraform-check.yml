@@ -9,11 +9,12 @@ permissions:
   id-token: write
   contents: read
 
+env:
+  GO_LINT_TIMEOUT: 30m # Set timeout for go-lint due to longer runner times
+
 jobs:
   check:
     name: "Check AWS Terraform Code"
-    env:
-      GO_LINT_TIMEOUT: 30m
     permissions:
       contents: read
       id-token: write
