@@ -30,7 +30,8 @@ func TestMultiSubnetWithChanges(t *testing.T, ctx testTypes.TestContext) {
 	opts := ctx.TerratestTerraformOptions()
 
 	// Get AWS config for API calls
-	awsConfig := GetAWSConfig(t, "us-west-2") // Will use region from test config
+	region := GetRegion(t, opts)
+	awsConfig := GetAWSConfig(t, region)
 	efsClient := efs.NewFromConfig(awsConfig)
 
 	// Initial deployment with all subnets - get outputs from Terraform
@@ -241,7 +242,7 @@ func TestSimpleExample(t *testing.T, ctx testTypes.TestContext) {
 	t.Logf("EFS file system: %s (%s)", efsFileSystemID, efsFileSystemARN)
 
 	// Validate mount target exists in AWS using AWS API
-	region := mountTargetAZName[:len(mountTargetAZName)-1] // Extract region from AZ name
+	region := GetRegion(t, opts)
 	awsConfig := GetAWSConfig(t, region)
 	efsClient := efs.NewFromConfig(awsConfig)
 	ec2Client := ec2.NewFromConfig(awsConfig)
@@ -303,45 +304,14 @@ func GetAWSConfig(t *testing.T, region string) (cfg aws.Config) {
 	return cfg
 }
 
-// GetRegionFromTerraform extracts the AWS region from Terraform configuration
-// This function works with both simple and multi-subnet examples
-func GetRegionFromTerraform(t *testing.T, opts *terraform.Options) string {
-	outputs := terraform.OutputAll(t, opts)
-
-	// Try to get region from availability zone names
-	// Simple example: mount_target_availability_zone_name (single string)
-	// Multi-subnet example: mount_target_availability_zones (map)
-	if azName, exists := outputs["mount_target_availability_zone_name"]; exists {
-		// Simple example - direct string output
-		azStr := azName.(string)
-		if len(azStr) > 0 {
-			region := azStr[:len(azStr)-1]
-			t.Logf("Detected region %s from availability zone %s", region, azStr)
-			return region
-		}
-	}
-
-	if azNamesOutput, exists := outputs["mount_target_availability_zones"]; exists {
-		// Multi-subnet example - map output
-		azNames := azNamesOutput.(map[string]interface{})
-		for _, azVal := range azNames {
-			az := azVal.(string)
-			if len(az) > 0 {
-				region := az[:len(az)-1]
-				t.Logf("Detected region %s from availability zone %s", region, az)
-				return region
-			}
-		}
-	}
-
-	// Fallback: try to get region from vars or return default
+// GetRegion safely extracts the region from terraform vars with validation
+func GetRegion(t *testing.T, opts *terraform.Options) string {
 	if region, exists := opts.Vars["region"]; exists {
 		regionStr := region.(string)
+		require.NotEmpty(t, regionStr, "region variable is set but empty")
 		t.Logf("Using region %s from terraform vars", regionStr)
 		return regionStr
 	}
-
-	// If all else fails, return us-west-2 as default (matches test.tfvars)
-	t.Logf("WARNING: Could not detect region from Terraform, using default us-west-2")
-	return "us-west-2"
+	require.Fail(t, "region variable not found in terraform vars - ensure your example sets it")
+	return ""
 }
