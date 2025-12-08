@@ -12,6 +12,8 @@ permissions:
 jobs:
   check:
     name: "Check AWS Terraform Code"
+    env:
+      GO_LINT_TIMEOUT: 30m
     permissions:
       contents: read
       id-token: write
