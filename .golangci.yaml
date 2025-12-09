@@ -1,0 +1,5 @@
+version: "2"
+run:
+  # Timeout for analysis, e.g. 30s, 5m.
+  timeout: 10m # moved to 10 min due to length of time that runners were taking to check
+  allow-parallel-runners: true
