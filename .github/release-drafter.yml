@@ -25,10 +25,10 @@ categories:
 autolabeler:
   - label: "major"
     branch:
-      - '/(patch|bug|fix|feature|chore)!\/.+/'
+      - '/(patch|bug|fix|feature|feat|chore)!\/.+/'
   - label: "minor"
     branch:
-      - '/feature\/.+/'
+      - '/(feature|feat)\/.+/'
   - label: "patch"
     branch:
       - '/(patch|bug|fix|chore)\/.+/'
