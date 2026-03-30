@@ -3,7 +3,7 @@ module github.com/launchbynttdata/tf-aws-module_primitive-efs_mount_target
 go 1.25
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.40.1
+	github.com/aws/aws-sdk-go-v2 v1.41.5
 	github.com/aws/aws-sdk-go-v2/config v1.32.3
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.275.1
 	github.com/aws/aws-sdk-go-v2/service/efs v1.41.7
@@ -49,7 +49,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.67.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.11 // indirect
-	github.com/aws/smithy-go v1.24.0 // indirect
+	github.com/aws/smithy-go v1.24.2 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/boombuler/barcode v1.1.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
