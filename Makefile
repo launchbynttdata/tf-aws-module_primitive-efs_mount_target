@@ -168,3 +168,19 @@ secrets-baseline:
 	detect-secrets scan > .secrets.baseline
 	@echo "✅ Secrets baseline created successfully!"
 	@echo "Review .secrets.baseline to ensure no false positives are included."
+ifeq ($(wildcard $(COMPONENTS_DIR)/Makefile),)
+# golangci-lint via go tool (go.mod tool directive)
+GO ?= go
+GOLANGCI_LINT := $(GO) tool golangci-lint
+# Minimal lint when components/ is not synced
+GO_TEST_DIRECTORIES ?= tests
+GOLANGCI_LINT_CONFIG ?= .golangci.yaml
+FIND ?= find
+GREP ?= grep
+
+.PHONY: lint check
+lint:
+	$(FIND) $(GO_TEST_DIRECTORIES)/ -name '*.go' | $(GREP) -q '\.go' || exit 0; $(GOLANGCI_LINT) run -c $(GOLANGCI_LINT_CONFIG) -v ./$(GO_TEST_DIRECTORIES)/...;
+
+check: lint
+endif

@@ -280,12 +280,6 @@ terraform destroy -var-file=test.tfvars
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.5 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 5.100 |
 
-## Providers
-
-| Name | Version |
-|------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | 5.100.0 |
-
 ## Modules
 
 | Name | Source | Version |
@@ -306,32 +300,32 @@ terraform destroy -var-file=test.tfvars
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_region"></a> [region](#input\_region) | AWS region where resources will be created | `string` | `"us-east-2"` | no |
-| <a name="input_project_name"></a> [project\_name](#input\_project\_name) | Project name used for resource naming and tagging | `string` | `"efs-mt-multi"` | no |
-| <a name="input_environment"></a> [environment](#input\_environment) | Environment name (e.g., dev, test, prod) | `string` | `"test"` | no |
-| <a name="input_vpc_cidr_block"></a> [vpc\_cidr\_block](#input\_vpc\_cidr\_block) | CIDR block for the VPC | `string` | `"10.0.0.0/16"` | no |
-| <a name="input_subnet_configs"></a> [subnet\_configs](#input\_subnet\_configs) | List of subnet configurations with CIDR blocks and AZ letter suffixes (e.g., 'a', 'b', 'c') | <pre>list(object({<br/>    cidr_block = string<br/>    az_letter  = string<br/>  }))</pre> | n/a | yes |
-| <a name="input_enabled_subnet_indices"></a> [enabled\_subnet\_indices](#input\_enabled\_subnet\_indices) | List of subnet indices (0-based) to create mount targets in.<br/>If null or empty, mount targets will be created in all subnets.<br/><br/>Example: [0, 2] creates mount targets only in the 1st and 3rd subnets.<br/>This allows testing subnet removal/addition without rebuilding existing mount targets. | `list(number)` | `null` | no |
 | <a name="input_efs_encrypted"></a> [efs\_encrypted](#input\_efs\_encrypted) | Whether to enable encryption at rest for the EFS file system | `bool` | `true` | no |
+| <a name="input_enabled_subnet_indices"></a> [enabled\_subnet\_indices](#input\_enabled\_subnet\_indices) | List of subnet indices (0-based) to create mount targets in.<br/>If null or empty, mount targets will be created in all subnets.<br/><br/>Example: [0, 2] creates mount targets only in the 1st and 3rd subnets.<br/>This allows testing subnet removal/addition without rebuilding existing mount targets. | `list(number)` | `null` | no |
+| <a name="input_environment"></a> [environment](#input\_environment) | Environment name (e.g., dev, test, prod) | `string` | `"test"` | no |
 | <a name="input_mount_target_create_timeout"></a> [mount\_target\_create\_timeout](#input\_mount\_target\_create\_timeout) | Timeout for creating EFS mount targets | `string` | `"30m"` | no |
 | <a name="input_mount_target_delete_timeout"></a> [mount\_target\_delete\_timeout](#input\_mount\_target\_delete\_timeout) | Timeout for deleting EFS mount targets | `string` | `"10m"` | no |
+| <a name="input_project_name"></a> [project\_name](#input\_project\_name) | Project name used for resource naming and tagging | `string` | `"efs-mt-multi"` | no |
+| <a name="input_region"></a> [region](#input\_region) | AWS region where resources will be created | `string` | `"us-east-2"` | no |
+| <a name="input_subnet_configs"></a> [subnet\_configs](#input\_subnet\_configs) | List of subnet configurations with CIDR blocks and AZ letter suffixes (e.g., 'a', 'b', 'c') | <pre>list(object({<br/>    cidr_block = string<br/>    az_letter  = string<br/>  }))</pre> | n/a | yes |
+| <a name="input_vpc_cidr_block"></a> [vpc\_cidr\_block](#input\_vpc\_cidr\_block) | CIDR block for the VPC | `string` | `"10.0.0.0/16"` | no |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
-| <a name="output_vpc_id"></a> [vpc\_id](#output\_vpc\_id) | The ID of the VPC |
-| <a name="output_subnet_ids"></a> [subnet\_ids](#output\_subnet\_ids) | List of all created subnet IDs |
-| <a name="output_subnet_availability_zones"></a> [subnet\_availability\_zones](#output\_subnet\_availability\_zones) | Map of subnet IDs to their availability zones |
+| <a name="output_efs_file_system_arn"></a> [efs\_file\_system\_arn](#output\_efs\_file\_system\_arn) | The ARN of the EFS file system |
+| <a name="output_efs_file_system_id"></a> [efs\_file\_system\_id](#output\_efs\_file\_system\_id) | The ID of the EFS file system |
 | <a name="output_enabled_mount_target_keys"></a> [enabled\_mount\_target\_keys](#output\_enabled\_mount\_target\_keys) | List of mount target keys that are enabled |
 | <a name="output_enabled_subnet_ids"></a> [enabled\_subnet\_ids](#output\_enabled\_subnet\_ids) | Map of mount target key to subnet ID where mount targets are enabled |
-| <a name="output_efs_file_system_id"></a> [efs\_file\_system\_id](#output\_efs\_file\_system\_id) | The ID of the EFS file system |
-| <a name="output_efs_file_system_arn"></a> [efs\_file\_system\_arn](#output\_efs\_file\_system\_arn) | The ARN of the EFS file system |
-| <a name="output_mount_target_ids"></a> [mount\_target\_ids](#output\_mount\_target\_ids) | Map of mount target key (e.g., 'az-a') to EFS mount target ID |
-| <a name="output_mount_target_subnet_ids"></a> [mount\_target\_subnet\_ids](#output\_mount\_target\_subnet\_ids) | Map of mount target key to subnet ID |
-| <a name="output_mount_target_dns_names"></a> [mount\_target\_dns\_names](#output\_mount\_target\_dns\_names) | Map of mount target key to EFS file system DNS name |
-| <a name="output_mount_target_az_dns_names"></a> [mount\_target\_az\_dns\_names](#output\_mount\_target\_az\_dns\_names) | Map of mount target key to mount target AZ-specific DNS name |
-| <a name="output_mount_target_network_interface_ids"></a> [mount\_target\_network\_interface\_ids](#output\_mount\_target\_network\_interface\_ids) | Map of mount target key to network interface ID |
 | <a name="output_mount_target_availability_zones"></a> [mount\_target\_availability\_zones](#output\_mount\_target\_availability\_zones) | Map of mount target key to availability zone name |
+| <a name="output_mount_target_az_dns_names"></a> [mount\_target\_az\_dns\_names](#output\_mount\_target\_az\_dns\_names) | Map of mount target key to mount target AZ-specific DNS name |
+| <a name="output_mount_target_dns_names"></a> [mount\_target\_dns\_names](#output\_mount\_target\_dns\_names) | Map of mount target key to EFS file system DNS name |
+| <a name="output_mount_target_ids"></a> [mount\_target\_ids](#output\_mount\_target\_ids) | Map of mount target key (e.g., 'az-a') to EFS mount target ID |
+| <a name="output_mount_target_network_interface_ids"></a> [mount\_target\_network\_interface\_ids](#output\_mount\_target\_network\_interface\_ids) | Map of mount target key to network interface ID |
+| <a name="output_mount_target_subnet_ids"></a> [mount\_target\_subnet\_ids](#output\_mount\_target\_subnet\_ids) | Map of mount target key to subnet ID |
 | <a name="output_security_group_id"></a> [security\_group\_id](#output\_security\_group\_id) | The ID of the EFS security group |
+| <a name="output_subnet_availability_zones"></a> [subnet\_availability\_zones](#output\_subnet\_availability\_zones) | Map of subnet IDs to their availability zones |
+| <a name="output_subnet_ids"></a> [subnet\_ids](#output\_subnet\_ids) | List of all created subnet IDs |
+| <a name="output_vpc_id"></a> [vpc\_id](#output\_vpc\_id) | The ID of the VPC |
 <!-- END_TF_DOCS -->
