@@ -33,7 +33,7 @@ func TestSimpleExampleReadOnly(t *testing.T) {
 		SetTestConfigFileName(infraTFVarFileNameDefault).
 		Build()
 
-	lib.RunSetupTestTeardown(t, *ctx, testimpl.TestSimpleExample)
+	lib.RunNonDestructiveTest(t, *ctx, testimpl.TestComposableSimpleExample)
 }
 
 func TestMultiSubnetExampleReadOnly(t *testing.T) {
@@ -44,5 +44,5 @@ func TestMultiSubnetExampleReadOnly(t *testing.T) {
 		SetTestConfigFileName(infraTFVarFileNameDefault).
 		Build()
 
-	lib.RunSetupTestTeardown(t, *ctx, testimpl.TestMultiSubnetWithChanges)
+	lib.RunNonDestructiveTest(t, *ctx, testimpl.TestComposableMultiSubnetWithChanges)
 }

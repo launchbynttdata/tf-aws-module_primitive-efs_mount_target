@@ -17,13 +17,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestMultiSubnetWithChanges tests the multi-subnet example with dynamic subnet changes
+// TestComposableMultiSubnetWithChanges tests the multi-subnet example with dynamic subnet changes
 // This validates that mount targets are not rebuilt when subnet configurations change
 // Test scenario:
 // 1. Deploy all 3 mount targets (az-a, az-b, az-c)
 // 2. Remove az-b - verify az-a and az-c are unchanged
 // 3. Re-add az-b and remove az-a - verify az-c is unchanged
-func TestMultiSubnetWithChanges(t *testing.T, ctx testTypes.TestContext) {
+func TestComposableMultiSubnetWithChanges(t *testing.T, ctx testTypes.TestContext) {
 	t.Log("=======================================================")
 	t.Log("=== Stage 1: Deploy all 3 mount targets ===")
 	t.Log("=======================================================")
@@ -31,9 +31,9 @@ func TestMultiSubnetWithChanges(t *testing.T, ctx testTypes.TestContext) {
 	opts := ctx.TerratestTerraformOptions()
 
 	// Initial deployment with all subnets - get outputs from Terraform
-	mountTargetIDsOutput := terraform.OutputMap(t, opts, "mount_target_ids")
-	efsFileSystemID := terraform.Output(t, opts, "efs_file_system_id")
-	efsFileSystemARN := terraform.Output(t, opts, "efs_file_system_arn")
+	mountTargetIDsOutput := terraform.OutputMapContext(t, t.Context(), opts, "mount_target_ids")
+	efsFileSystemID := terraform.OutputContext(t, t.Context(), opts, "efs_file_system_id")
+	efsFileSystemARN := terraform.OutputContext(t, t.Context(), opts, "efs_file_system_arn")
 
 	// Extract region from EFS ARN and configure AWS SDK
 	region := GetRegionFromARN(t, efsFileSystemARN)
@@ -82,10 +82,10 @@ func TestMultiSubnetWithChanges(t *testing.T, ctx testTypes.TestContext) {
 	}
 
 	// Apply with the new configuration
-	terraform.Apply(t, opts)
+	terraform.ApplyContext(t, t.Context(), opts)
 
 	// Get mount target IDs from Terraform output
-	mountTargetIDsOutput = terraform.OutputMap(t, opts, "mount_target_ids")
+	mountTargetIDsOutput = terraform.OutputMapContext(t, t.Context(), opts, "mount_target_ids")
 
 	// Verify only 2 mount targets remain in Terraform output
 	assert.Len(t, mountTargetIDsOutput, 2, "Should have 2 mount targets after removing az-b")
@@ -134,10 +134,10 @@ func TestMultiSubnetWithChanges(t *testing.T, ctx testTypes.TestContext) {
 	}
 
 	// Apply with the new configuration
-	terraform.Apply(t, opts)
+	terraform.ApplyContext(t, t.Context(), opts)
 
 	// Get mount target IDs from Terraform output
-	mountTargetIDsOutput = terraform.OutputMap(t, opts, "mount_target_ids")
+	mountTargetIDsOutput = terraform.OutputMapContext(t, t.Context(), opts, "mount_target_ids")
 
 	// Verify only 2 mount targets remain in Terraform output
 	assert.Len(t, mountTargetIDsOutput, 2, "Should have 2 mount targets after re-adding az-b and removing az-a")
@@ -205,22 +205,22 @@ func GetMountTargetsByFileSystem(t *testing.T, fileSystemID string, efsClient *e
 	return result.MountTargets
 }
 
-// TestSimpleExample tests the simple example with a single mount target
-func TestSimpleExample(t *testing.T, ctx testTypes.TestContext) {
+// TestComposableSimpleExample tests the simple example with a single mount target
+func TestComposableSimpleExample(t *testing.T, ctx testTypes.TestContext) {
 	t.Log("=== Testing Simple Example (Single Mount Target) ===")
 
 	opts := ctx.TerratestTerraformOptions()
 
 	// Get all outputs - now direct values instead of maps
-	mountTargetID := terraform.Output(t, opts, "mount_target_id")
-	mountTargetSubnetID := terraform.Output(t, opts, "mount_target_subnet_id")
-	mountTargetDNSName := terraform.Output(t, opts, "mount_target_dns_name")
-	mountTargetAZDNSName := terraform.Output(t, opts, "mount_target_az_dns_name")
-	mountTargetNetworkInterfaceID := terraform.Output(t, opts, "mount_target_network_interface_id")
-	mountTargetAZName := terraform.Output(t, opts, "mount_target_availability_zone_name")
-	mountTargetAZID := terraform.Output(t, opts, "mount_target_availability_zone_id")
-	efsFileSystemID := terraform.Output(t, opts, "efs_file_system_id")
-	efsFileSystemARN := terraform.Output(t, opts, "efs_file_system_arn")
+	mountTargetID := terraform.OutputContext(t, t.Context(), opts, "mount_target_id")
+	mountTargetSubnetID := terraform.OutputContext(t, t.Context(), opts, "mount_target_subnet_id")
+	mountTargetDNSName := terraform.OutputContext(t, t.Context(), opts, "mount_target_dns_name")
+	mountTargetAZDNSName := terraform.OutputContext(t, t.Context(), opts, "mount_target_az_dns_name")
+	mountTargetNetworkInterfaceID := terraform.OutputContext(t, t.Context(), opts, "mount_target_network_interface_id")
+	mountTargetAZName := terraform.OutputContext(t, t.Context(), opts, "mount_target_availability_zone_name")
+	mountTargetAZID := terraform.OutputContext(t, t.Context(), opts, "mount_target_availability_zone_id")
+	efsFileSystemID := terraform.OutputContext(t, t.Context(), opts, "efs_file_system_id")
+	efsFileSystemARN := terraform.OutputContext(t, t.Context(), opts, "efs_file_system_arn")
 
 	// Verify all outputs are populated
 	assert.NotEmpty(t, mountTargetID, "Mount target ID should not be empty")
