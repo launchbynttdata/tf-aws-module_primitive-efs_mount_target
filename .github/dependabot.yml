@@ -6,6 +6,12 @@ multi-ecosystem-groups:
       include: scope
     schedule:
       interval: "daily"
+  module:
+    commit-message:
+      prefix: "chore"
+      include: scope
+    schedule:
+      interval: "weekly"
   workflows:
     commit-message:
       prefix: "chore"
@@ -32,3 +38,14 @@ updates:
     patterns: [ "*" ]
     cooldown:
       default-days: 14
+  - package-ecosystem: "terraform"
+    directory: "/"
+    multi-ecosystem-group: "module"
+    patterns: [ "*" ]
+    ignore:
+      - dependency-name: "hashicorp/*"
+        update-types: [ "version-update:semver-major" ]
+      - dependency-name: "microsoft/*"
+        update-types: [ "version-update:semver-major" ]
+      - dependency-name: "azure/*"
+        update-types: [ "version-update:semver-major" ]
