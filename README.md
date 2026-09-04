@@ -1,173 +1,7 @@
 # tf-aws-module_primitive-efs_mount_target
 
-## What is a Primitive Module?
-
-A **primitive module** is a thin, focused Terraform wrapper around a single AWS resource type. Primitive modules:
-
-- Wrap a **single AWS resource** (e.g., `aws_eks_cluster`, `aws_kms_key`, `aws_s3_bucket`)
-- Provide sensible defaults while maintaining full configurability
-- Include comprehensive validation rules
-- Follow consistent patterns for inputs, outputs, and tagging
-- Include automated testing using Terratest
-- Serve as building blocks for higher-level composite modules
-
-For examples of well-structured primitive modules, see:
-
-- [tf-aws-module_primitive-eks_cluster](https://github.com/launchbynttdata/tf-aws-module_primitive-eks_cluster)
-- [tf-aws-module_primitive-kms_key](https://github.com/launchbynttdata/tf-aws-module_primitive-kms_key)
-
----
-
-## Getting Started with This Template
-
-### 1. Create Your New Module Repository
-
-1. Click the "Use this template" button on GitHub
-2. Name your repository following the naming convention: `tf-aws-module_primitive-<resource_name>`
-   - Examples: `tf-aws-module_primitive-s3_bucket`, `tf-aws-module_primitive-lambda_function`
-3. Clone your new repository locally
-
-### 2. Initialize and Clean Up Template References
-
-After cloning, run the cleanup target to update template references with your actual repository information:
-
-```bash
-make init-module
-```
-
-This command will:
-
-- Update the `go.mod` file with your repository's GitHub URL
-- Update test imports to reference your new module name
-- Remove template-specific placeholders
-
-### 3. Configure Your Environment
-
-Install required development dependencies:
-
-```bash
-make configure-dependencies
-make configure-git-hooks
-```
-
-This installs:
-
-- Terraform
-- Go
-- Pre-commit hooks
-- Other development tools specified in `.tool-versions`
-
----
-
-## HOWTO: Developing a Primitive Module
-
-### Step 1: Define Your Resource
-
-1. **Identify the AWS resource** you're wrapping (e.g., `aws_eks_cluster`)
-2. **Review AWS documentation** for the resource to understand all available parameters
-3. **Study similar primitive modules** for patterns and best practices
-
-### Step 2: Create the Module Structure
-
-Your primitive module should include these core files:
-
-#### `main.tf`
-
-- Contains the primary resource declaration
-- Should be clean and focused on the single resource
-- Example:
-
-```hcl
-resource "aws_eks_cluster" "this" {
-  name     = var.name
-  role_arn = var.role_arn
-  version  = var.kubernetes_version
-
-  vpc_config {
-    subnet_ids              = var.vpc_config.subnet_ids
-    security_group_ids      = var.vpc_config.security_group_ids
-    endpoint_private_access = var.vpc_config.endpoint_private_access
-    endpoint_public_access  = var.vpc_config.endpoint_public_access
-    public_access_cidrs     = var.vpc_config.public_access_cidrs
-  }
-
-  tags = merge(
-    var.tags,
-    local.default_tags
-  )
-}
-```
-
-#### `variables.tf`
-
-- Define all configurable parameters
-- Include clear descriptions for each variable
-- Set sensible defaults where appropriate
-- Use validation rules to enforce constraints, but only when the validations can be made precise.
-- Alternatively, use [`check`](https://developer.hashicorp.com/terraform/language/block/check) blocks to create more complicated validations. (Requires terraform ~> 1.12)
-- Example:
-
-```hcl
-variable "name" {
-  description = "Name of the EKS cluster"
-  type        = string
-
-  validation {
-    condition     = length(var.name) <= 100
-    error_message = "Cluster name must be 100 characters or less"
-  }
-}
-
-variable "kubernetes_version" {
-  description = "Kubernetes version to use for the EKS cluster"
-  type        = string
-  default     = null
-
-  validation {
-    condition     = var.kubernetes_version == null || can(regex("^1\\.(2[89]|[3-9][0-9])$", var.kubernetes_version))
-    error_message = "Kubernetes version must be 1.28 or higher"
-  }
-}
-```
-
-#### `outputs.tf`
-
-- Export all useful attributes of the resource
-- Include comprehensive outputs for downstream consumption
-- Document what each output provides
-- Example:
-
-```hcl
-output "id" {
-  description = "The ID of the EKS cluster"
-  value       = aws_eks_cluster.this.id
-}
-
-output "arn" {
-  description = "The ARN of the EKS cluster"
-  value       = aws_eks_cluster.this.arn
-}
-
-output "endpoint" {
-  description = "The endpoint for the EKS cluster API server"
-  value       = aws_eks_cluster.this.endpoint
-}
-```
-
-#### `locals.tf`
-
-- Define local values and transformations
-- Include standard tags (e.g., `provisioner = "Terraform"`)
-- Example:
-
-```hcl
-locals {
-  default_tags = {
-    provisioner = "Terraform"
-  }
-}
-
-# tf-aws-module_primitive-efs_mount_target
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License: CC BY-NC-ND 4.0](https://img.shields.io/badge/License-CC_BY--NC--ND_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-nd/4.0/)
 
 ## Overview
 
@@ -180,7 +14,6 @@ This primitive module creates a **single** AWS EFS mount target in a specified s
 - **Optional IP Address**: Specify a static IP or let AWS assign one automatically
 - **Input Validation**: Validates required parameters
 - **Comprehensive Outputs**: Exposes mount target ID, DNS names, network interface ID, and more
-- **Follows Launch by NTT DATA Standards**: Consistent patterns and best practices
 
 ## Usage
 
@@ -188,124 +21,37 @@ This primitive module creates a **single** AWS EFS mount target in a specified s
 
 ```hcl
 module "efs_mount_target" {
-  source             = "launchbynttdata/efs_mount_target/aws"
-  efs_filesystem_id  = "fs-12345678"
-  subnet_id          = "subnet-abc123"
-  security_group_ids = ["sg-12345678"]
+  source = "../../"
+
+  efs_filesystem_id  = module.aws_efs_file_system.file_system_id
+  subnet_id          = aws_subnet.this.id
+  security_group_ids = [aws_security_group.this.id]
 }
 ```
 
 ### Multiple Mount Targets (Recommended Pattern)
 
-Use `for_each` to create multiple mount targets across availability zones:
-
 ```hcl
 locals {
   mount_targets = {
-    "az-a" = { subnet_id = "subnet-abc123" }
-    "az-b" = { subnet_id = "subnet-def456" }
-    "az-c" = { subnet_id = "subnet-ghi789" }
+    "az-a" = { subnet_id = aws_subnet.az_a.id }
+    "az-b" = { subnet_id = aws_subnet.az_b.id }
   }
 }
 
 module "efs_mount_target" {
-  source   = "launchbynttdata/efs_mount_target/aws"
+  source   = "../../"
   for_each = local.mount_targets
 
-  efs_filesystem_id  = "fs-12345678"
+  efs_filesystem_id  = module.aws_efs_file_system.file_system_id
   subnet_id          = each.value.subnet_id
-  security_group_ids = ["sg-12345678"]
-}
-
-# Access outputs
-output "mount_target_ids" {
-  value = { for k, v in module.efs_mount_target : k => v.mount_target_id }
+  security_group_ids = [aws_security_group.this.id]
 }
 ```
-
-## Inputs
-
-| Name                | Description                                                        | Type         | Default | Required |
-|---------------------|--------------------------------------------------------------------|--------------|---------|:--------:|
-| efs_filesystem_id   | The ID of the EFS file system                                      | string       | n/a     | yes      |
-| subnet_id           | The subnet ID where the mount target will be created               | string       | n/a     | yes      |
-| security_group_ids  | List of security group IDs for the mount target                    | list(string) | `null`  | no       |
-| ip_address          | Static IPv4 address for the mount target (optional)                | string       | `null`  | no       |
-| create_timeout      | Timeout for creating the mount target                              | string       | `"30m"` | no       |
-| delete_timeout      | Timeout for deleting the mount target                              | string       | `"10m"` | no       |
-
-## Outputs
-
-| Name                               | Description                                              |
-|------------------------------------|----------------------------------------------------------|
-| mount_target_id                    | The ID of the EFS mount target                           |
-| mount_target_subnet_id             | The subnet ID where the mount target is located          |
-| mount_target_dns_name              | The DNS name for the EFS file system                     |
-| mount_target_az_dns_name           | The AZ-specific DNS name for the mount target            |
-| mount_target_file_system_arn       | The ARN of the EFS file system                           |
-| mount_target_network_interface_id  | The network interface ID for the mount target            |
-| mount_target_availability_zone_name| The availability zone name                               |
-| mount_target_availability_zone_id  | The availability zone ID                                 |
-| mount_target_owner_id              | The AWS account ID that owns the mount target            |
-
-## Validation Rules
-
-- `subnet_id` must be a non-empty string
-- `security_group_ids` must be null or contain at least one security group ID
-- `efs_filesystem_id` must be a non-empty string
-
-## Why This Pattern?
-
-### Primitive Module Design
-
-This module creates **one mount target per invocation** following primitive module best practices:
-
-- **Simplicity**: Each module call has a clear, single responsibility
-- **Flexibility**: Callers control how mount targets are organized using `for_each` or `count`
-- **Stability**: Resource addresses are determined by the caller's `for_each` keys
-- **Composability**: Easy to integrate into higher-level modules
-
-### Benefits
-
-1. **Stable Infrastructure**: Using static keys in `for_each` prevents unnecessary rebuilds
-2. **Predictable Behavior**: Adding/removing mount targets only affects those specific resources
-3. **Clear Resource Addressing**: `module.efs_mount_target["az-a"]` is explicit and readable
-4. **Testability**: Simple to test individual mount target creation
 
 ## Examples
 
-This repository includes two examples demonstrating different use cases:
-
-- **[simple](./examples/simple/)**: Basic single mount target deployment
-- **[multi_subnet](./examples/multi_subnet/)**: Multiple mount targets across availability zones using `for_each`
-
-## Testing
-
-Run all validation and tests:
-
-```bash
-make check
-```
-
-To deploy an example:
-
-```bash
-cd examples/simple
-terraform init
-terraform plan -var-file=test.tfvars -out=the.tfplan
-terraform apply the.tfplan
-terraform destroy -var-file=test.tfvars
-```
-
-## AWS Documentation
-
-- [aws_efs_mount_target](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_mount_target)
-- [Amazon EFS: How It Works](https://docs.aws.amazon.com/efs/latest/ug/how-it-works.html)
-
-## License
-
-Apache 2.0. See LICENSE and NOTICE files for details.
-- Adjust test context as needed
+See [examples/simple](./examples/simple) and [examples/multi_subnet](./examples/multi_subnet).
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
@@ -350,3 +96,68 @@ No modules.
 | <a name="output_mount_target_availability_zone_id"></a> [mount\_target\_availability\_zone\_id](#output\_mount\_target\_availability\_zone\_id) | The unique identifier of the Availability Zone (AZ) that the mount target resides in. |
 | <a name="output_mount_target_owner_id"></a> [mount\_target\_owner\_id](#output\_mount\_target\_owner\_id) | AWS account ID that owns the mount target resource. |
 <!-- END_TF_DOCS -->
+
+## Module Development
+
+### Pre-Requisites
+
+The following commands should be available on your system:
+
+- `asdf` or `mise`
+- `make`
+- `python3` (for pre-commit)
+
+Additionally, your `git` user and email must be configured. Run the `make configure` command from the root of the repository to ensure that you meet these requirements.
+
+### Pre-Commit hooks
+
+The [.pre-commit-config.yaml](.pre-commit-config.yaml) file defines certain `pre-commit` hooks that are relevant to Terraform and Golang, as well as some common linting tasks. These will be configured for you when you run `make configure`.
+
+### Local Validation
+
+You should validate the changes you make to any module locally, prior to pushing your changes in a branch to GitHub.
+
+1. Ensure that you have run `make configure` successfully.
+
+2. Ensure you are signed into the appropriate cloud provider (e.g. AWS or Azure) for the module under test in your current console session.
+
+3. Run the Terraform and Golang linters with the following command:
+
+```
+make lint
+```
+
+4. Once you have satisfied the linters, the following command will build example infrastructure in your configured cloud, run the tests, and then tear down the infrastructure it created:
+
+```
+make test
+```
+
+The pre-commit validations, as well as the `make lint` and `make test` targets, will all be performed in CI. Running these validations locally prior to opening a PR helps ensure a smooth review and merge process.
+
+### Review & Merge Process
+
+Once your change has been tested locally and your branch pushed up, open a new Pull Request for your branch to the default (main) branch of this repository.
+
+The title of your Pull Request will determine the version bump for this change, and the title must be in [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#specification) format in order to merge. A breaking change will trigger a major version bump, a feature will trigger a minor version bump, and all other types will trigger a patch version bump.
+
+Ensure your CI workflows are passing; seek approval from teammates and address any feedback; seek any explicit approvals required by the CODEOWNERS file. You may merge the PR as soon as all requirements are met, and a new release and tag will be automatically created for you.
+
+### Automatic Updates
+
+The shared configuration and workflow files in this repository are largely managed through the [launch-terraform-skeleton](https://github.com/launchbynttdata/launch-terraform-skeleton) repository. Outside of perhaps the `.gitignore` to account for specific files being generated by certain Terraform modules (e.g. Lambda functions), there should not be much cause to update these files on a per-repo basis, and making changes to them individually is discouraged.
+
+If desired, you can check for and run these updates locally in a branch if you have the `copier` tool installed. Some example commands are included below:
+
+```
+# Check for updates, optionally checking prerelease versions
+copier check-update [--prereleases]
+
+# Run an update, using default answers if there are any. We use tasks, which requires --trust to be set.
+copier update --defaults --trust [--prereleases]
+
+# Recopy from the source, and --overwrite all templated files in the process
+copier recopy --defaults --trust --overwrite [--prereleases]
+```
+
+Automatic updates will run through a scheduled workflow, and if the post-update tests are successful, the Pull Request created will automatically merge. Conflicts in the update or failures to test may leave a Pull Request outstanding, which needs to be addressed by a Launch Engineer.

@@ -83,7 +83,7 @@ variable "enabled_subnet_indices" {
   default     = null
 
   validation {
-    condition = var.enabled_subnet_indices == null || alltrue([
+    condition = var.enabled_subnet_indices == null ? true : alltrue([
       for idx in var.enabled_subnet_indices : idx >= 0
     ])
     error_message = "All subnet indices must be non-negative integers."
