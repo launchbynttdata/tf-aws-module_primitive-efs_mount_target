@@ -89,9 +89,10 @@ resource "aws_default_security_group" "default" {
 module "aws_efs_file_system" {
   source = "github.com/launchbynttdata/tf-aws-module_primitive-efs_file_system?ref=1.0.0"
 
-  creation_token = "${var.project_name}-${var.environment}"
-  name           = "${var.project_name}-efs-fs"
-  encrypted      = var.efs_encrypted
+  creation_token   = "${var.project_name}-${var.environment}"
+  name             = "${var.project_name}-efs-fs"
+  encrypted        = var.efs_encrypted
+  lifecycle_policy = {}
 
   tags = {
     Name        = "${var.project_name}-efs-fs"
@@ -122,10 +123,12 @@ locals {
   }
 
   # Filter based on enabled_subnet_indices if provided
-  enabled_mount_targets = var.enabled_subnet_indices != null && length(var.enabled_subnet_indices) > 0 ? {
-    for idx in var.enabled_subnet_indices :
-    "az-${local.subnet_configs_with_full_az[idx].az_letter}" => local.all_mount_targets["az-${local.subnet_configs_with_full_az[idx].az_letter}"]
-  } : local.all_mount_targets
+  enabled_mount_targets = var.enabled_subnet_indices == null ? local.all_mount_targets : (
+    length(var.enabled_subnet_indices) > 0 ? {
+      for idx in var.enabled_subnet_indices :
+      "az-${local.subnet_configs_with_full_az[idx].az_letter}" => local.all_mount_targets["az-${local.subnet_configs_with_full_az[idx].az_letter}"]
+    } : local.all_mount_targets
+  )
 }
 
 # EFS mount target module usage

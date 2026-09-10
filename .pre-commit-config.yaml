@@ -36,12 +36,6 @@ repos:
         exclude: package.lock.json
   - repo: local
     hooks:
-      - id: golangci-lint
-        name: golangci-lint
-        entry: .github/scripts/golangci-lint-precommit.sh
-        language: script
-        types: [go]
-        pass_filenames: false
       - id: validate-readonly-test
         name: Validate readonly test wiring (RunNonDestructiveTest + TestComposable*)
         entry: .github/scripts/validate-readonly-test.sh

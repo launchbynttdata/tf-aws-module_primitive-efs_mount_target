@@ -64,9 +64,10 @@ resource "aws_default_security_group" "default" {
 module "aws_efs_file_system" {
   source = "github.com/launchbynttdata/tf-aws-module_primitive-efs_file_system?ref=1.0.0"
 
-  creation_token = var.efs_file_system_creation_token
-  name           = var.efs_mount_target_project_name != "" ? "${var.efs_mount_target_project_name}-efs-fs" : "efs_mount_target_example-efs-fs"
-  encrypted      = var.efs_file_system_encrypted
+  creation_token   = var.efs_file_system_creation_token
+  name             = var.efs_mount_target_project_name != "" ? "${var.efs_mount_target_project_name}-efs-fs" : "efs_mount_target_example-efs-fs"
+  encrypted        = var.efs_file_system_encrypted
+  lifecycle_policy = {}
 
   tags = {
     Environment = "dev"
